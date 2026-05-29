@@ -9,8 +9,9 @@ from note_assistant.config import TranscriptionConfig
 
 
 def test_registry_contains_expected_backends():
-    assert "apple" in _REGISTRY
     assert "faster-whisper" in _REGISTRY
+    if platform.system() == "Darwin":
+        assert "apple" in _REGISTRY
 
 
 def test_create_transcriber_unknown_backend_raises():
