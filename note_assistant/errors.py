@@ -19,7 +19,7 @@ class ErrorBus:
             pass
 
     def emit(self, source: str, message: str, severity: str = "error") -> None:
-        for cb in self._subscribers:
+        for cb in list(self._subscribers):
             try:
                 cb(source, message, severity)
             except Exception:

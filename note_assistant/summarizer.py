@@ -183,7 +183,7 @@ class OllamaSummarizer(BaseSummarizer):
     def _load(self) -> None:
         try:
             import ollama
-            self._ollama = ollama
+            self._ollama = ollama.Client(host=self.config.ollama_host)
         except ImportError as e:
             raise RuntimeError(
                 "ollama package not installed. Run: uv pip install ollama"
@@ -201,7 +201,6 @@ class OllamaSummarizer(BaseSummarizer):
             model=self.config.ollama_model,
             messages=[{"role": "user", "content": prompt}],
             stream=True,
-            options={"host": self.config.ollama_host},
         )
         for chunk in stream:
             token = chunk["message"]["content"]

@@ -49,7 +49,7 @@ def test_ollama_summarizer_translation_appends_instruction():
         cfg = SummarizationConfig(backend="ollama")
         s = OllamaSummarizer(cfg, "English", "Thai")
         prompts = []
-        def fake_chat(model, messages, stream, options):
+        def fake_chat(model, messages, stream, **kwargs):
             prompts.append(messages[0]["content"])
             return []
         s._ollama = type("FO", (), {"chat": staticmethod(fake_chat)})()

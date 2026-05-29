@@ -45,14 +45,6 @@ def main(
     if ctx.invoked_subcommand is not None:
         return
 
-    import logging
-    effective_level = (log_level or "WARNING").upper()
-    logging.basicConfig(
-        level=effective_level,
-        filename="note_assistant.log",
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
-
     cfg = load_config(
         path=config_file,
         source=source,
@@ -62,6 +54,14 @@ def main(
         ollama_model=ollama_model,
         chunk_seconds=chunk_seconds,
         log_level=log_level,
+    )
+
+    import logging
+    effective_level = (log_level or cfg.log_level).upper()
+    logging.basicConfig(
+        level=effective_level,
+        filename="note_assistant.log",
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
     if no_notes:

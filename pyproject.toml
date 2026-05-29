@@ -18,8 +18,8 @@ dependencies = [
     "pyobjc-core>=12.1; sys_platform == 'darwin'",
     "pyobjc-framework-Speech>=12.1; sys_platform == 'darwin'",
     "pyobjc-framework-AVFoundation>=12.1; sys_platform == 'darwin'",
-    "mlx>=0.31.2",
-    "mlx-lm>=0.31.3",
+    "mlx>=0.31.2; sys_platform == 'darwin'",
+    "mlx-lm>=0.31.3; sys_platform == 'darwin'",
 ]
 
 [dependency-groups]
@@ -29,7 +29,7 @@ dev = [
 ]
 
 [project.scripts]
-note-assistant = "note_assistant.__main__:main"
+note-assistant = "note_assistant.__main__:app"
 
 [build-system]
 requires = ["hatchling"]

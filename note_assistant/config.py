@@ -111,7 +111,7 @@ def detect_best_backends() -> tuple[str, str]:
     chip = subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip()
     is_apple_silicon = chip == "arm64"
 
-    if major > 15 or (major == 15 and minor >= 1):
+    if major >= 26:
         if is_apple_silicon:
             return "apple", "apple"
         else:
