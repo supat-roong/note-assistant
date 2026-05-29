@@ -32,3 +32,8 @@ def test_detect_best_backends_returns_valid_tuple():
     t, s = detect_best_backends()
     assert t in ("apple", "faster-whisper")
     assert s in ("apple", "mlx", "ollama")
+
+
+def test_load_config_log_level_override():
+    cfg = load_config(path=None, log_level="DEBUG")
+    assert cfg.log_level == "DEBUG"

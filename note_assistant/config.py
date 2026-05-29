@@ -54,7 +54,7 @@ class AppConfig(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     language_input: str = "English"
     language_output: str = "English"
-    log_level: str = "WARNING"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "WARNING"
 
 
 # ---------------------------------------------------------------------------
