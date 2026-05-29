@@ -1,0 +1,44 @@
+[project]
+name = "note-assistant"
+version = "0.1.0"
+description = "Live audio transcription and summarization to Apple Notes"
+requires-python = ">=3.11"
+dependencies = [
+    "sounddevice>=0.4.6",
+    "numpy>=1.26",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.0",
+    "textual>=0.60",
+    "faster-whisper>=1.0",
+    "ollama>=0.2",
+    "librosa>=0.10",
+    "pyobjc-core>=12.1; sys_platform == 'darwin'",
+    "pyobjc-framework-Speech>=12.1; sys_platform == 'darwin'",
+    "pyobjc-framework-AVFoundation>=12.1; sys_platform == 'darwin'",
+    "mlx>=0.31.2",
+    "mlx-lm>=0.31.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "textual[dev]>=0.60",
+]
+
+[project.scripts]
+note-assistant = "note_assistant.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["note_assistant"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
