@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Virtual environment
+.venv/
+
+# macOS
+.DS_Store
+
+# Project-specific: build artifacts
+NoteAssistant.app/
+
+# Project-specific: runtime output
+notes/
+
+# Project-specific: machine-generated config
+config.yaml
+
+# Project-specific: binary test files
+sample.mp3
+
+# Personal AI instructions
+CLAUDE.md
+
