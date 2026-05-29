@@ -14,7 +14,7 @@ from .audio_capture import AudioSource
 from .config import AppConfig
 from .errors import error_bus
 from .notes_writer import NotesWriter
-from .summarizer import create_summarizer
+from .summarizer import BaseSummarizer, create_summarizer
 from .transcriber import create_transcriber
 
 
@@ -25,7 +25,7 @@ class SummarizationWorker(threading.Thread):
 
     def __init__(
         self,
-        summarizer,
+        summarizer: BaseSummarizer,
         on_summary_token: Callable[[str], None],
         on_summary_complete: Callable[[str], None],
     ) -> None:
@@ -34,7 +34,7 @@ class SummarizationWorker(threading.Thread):
         self._on_summary_token = on_summary_token
         self._on_summary_complete = on_summary_complete
         self._q: queue.Queue[str | None] = queue.Queue()
-        self._paused = False
+        self._paused_event = threading.Event()
 
     def enqueue(self, window: str) -> None:
         if self._q.qsize() >= self.MAX_QUEUE_DEPTH:
@@ -47,10 +47,10 @@ class SummarizationWorker(threading.Thread):
         self._q.put(window)
 
     def pause(self) -> None:
-        self._paused = True
+        self._paused_event.set()
 
     def resume(self) -> None:
-        self._paused = False
+        self._paused_event.clear()
 
     def stop(self) -> None:
         self._q.put(None)
@@ -60,7 +60,7 @@ class SummarizationWorker(threading.Thread):
             window = self._q.get()
             if window is None:
                 break
-            if self._paused:
+            if self._paused_event.is_set():
                 continue
             try:
                 tokens: list[str] = []
