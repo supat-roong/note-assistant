@@ -42,9 +42,7 @@ class NotesWriter:
         self._flush(force=True)
 
     def _maybe_flush(self) -> None:
-        now = time.monotonic()
-        if now - self._last_flush >= self._throttle_secs:
-            self._flush()
+        self._flush()
 
     def _flush(self, force: bool = False) -> None:
         if not self._note_created:
@@ -55,7 +53,7 @@ class NotesWriter:
         self._last_flush = now
 
         body = f"# {self._title}\n\n---\n\n## Transcript\n\n"
-        body += " ".join(self._transcript_lines)
+        body += "\n".join(self._transcript_lines)
         if self._summary:
             body += f"\n\n---\n\n## Summary\n\n{self._summary}"
         if self._closed:
