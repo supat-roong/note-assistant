@@ -143,7 +143,6 @@ class MLXSummarizer(BaseSummarizer):
 
         model_name = getattr(self.config, "mlx_model", self.DEFAULT_MODEL)
         logger.info("Loading MLX model: %s (first run downloads ~2 GB)", model_name)
-        from mlx_lm import load
         self._model, self._tokenizer = load(model_name)
 
     def summarize(self, transcript: str) -> Iterator[str]:
