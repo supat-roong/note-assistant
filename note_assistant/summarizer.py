@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Iterator
 
 from .config import SummarizationConfig
+from note_assistant import logger
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +142,7 @@ class MLXSummarizer(BaseSummarizer):
             ) from e
 
         model_name = getattr(self.config, "mlx_model", self.DEFAULT_MODEL)
-        print(f"[info] Loading MLX model: {model_name} (first run downloads ~2 GB)")
+        logger.info("Loading MLX model: %s (first run downloads ~2 GB)", model_name)
         from mlx_lm import load
         self._model, self._tokenizer = load(model_name)
 
@@ -236,7 +237,6 @@ def create_summarizer(
         if config.backend != "apple":
             raise
         # Apple backend unavailable — fall back through MLX → Ollama without mutating config
-        from note_assistant import logger
         logger.warning("Apple backend unavailable (%s), trying MLX", e)
         try:
             return MLXSummarizer(config, language_input, language_output)

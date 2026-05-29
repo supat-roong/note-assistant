@@ -10,6 +10,7 @@ from typing import Any, Iterator, Optional
 import numpy as np
 
 from .config import TranscriptionConfig
+from note_assistant import logger
 
 
 # ---------------------------------------------------------------------------
@@ -56,9 +57,9 @@ class AppleSpeechTranscriber(BaseTranscriber):
             2: "Restricted",
             3: "Authorized",
         }
-        print(f"[debug] Apple Speech Authorization Status: {statuses.get(status, 'Unknown')}")
+        logger.debug("Apple Speech authorization: %s", statuses.get(status, "Unknown"))
         if status == 0:  # NotDetermined
-            print("[info] Requesting Microphone/Speech authorization...")
+            logger.info("Requesting Speech authorization")
             self._Speech.SFSpeechRecognizer.requestAuthorization_(lambda _: None)
 
     def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
@@ -69,7 +70,7 @@ class AppleSpeechTranscriber(BaseTranscriber):
 
         # Log audio level for debugging
         rms = np.float64(np.sqrt(np.mean(audio**2)))
-        print(f"[debug] Transcribing chunk: samples={len(audio)}, RMS={rms:.6f}")
+        logger.debug("Transcribing chunk: samples=%d, RMS=%.6f", len(audio), rms)
 
         if rms < 1e-4:
             # Silence threshold
@@ -96,7 +97,7 @@ class AppleSpeechTranscriber(BaseTranscriber):
 
         recognizer.setRequiresOnDeviceRecognition_(True)
         if not recognizer.isAvailable():
-            print("[error] SFSpeechRecognizer is not available (check System Settings).")
+            logger.error("SFSpeechRecognizer not available — check System Settings")
             return ""
 
         request = Speech.SFSpeechAudioBufferRecognitionRequest.alloc().init()
@@ -112,7 +113,7 @@ class AppleSpeechTranscriber(BaseTranscriber):
         def handler(result, error):  # noqa: ANN001
             nonlocal result_text
             if error:
-                print(f"[error] Recognition error: {error.localizedDescription()}")
+                logger.error("Recognition error: %s", error.localizedDescription())
             if result:
                 result_text = result.bestTranscription().formattedString()
             if result and result.isFinal():
@@ -123,7 +124,7 @@ class AppleSpeechTranscriber(BaseTranscriber):
         task = recognizer.recognitionTaskWithRequest_resultHandler_(request, handler)
         # Wait up to 5s for the response
         if not done.wait(timeout=5.0):
-            print("[debug] Recognition timed out for chunk.")
+            logger.debug("Recognition timed out for chunk")
             
         return result_text.strip()
 

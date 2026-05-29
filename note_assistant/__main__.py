@@ -38,10 +38,20 @@ def main(
         help="Disable Apple Notes output")] = False,
     auto: Annotated[bool, typer.Option("--auto",
         help="Auto-detect best backends for this machine")] = False,
+    log_level: Annotated[Optional[str], typer.Option("--log-level",
+        help="Logging level: DEBUG | INFO | WARNING | ERROR")] = None,
 ) -> None:
     """Launch the Note Assistant."""
     if ctx.invoked_subcommand is not None:
         return
+
+    import logging
+    effective_level = (log_level or "WARNING").upper()
+    logging.basicConfig(
+        level=effective_level,
+        filename="note_assistant.log",
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
 
     cfg = load_config(
         path=config_file,
@@ -51,6 +61,7 @@ def main(
         summarization_backend=summarization_backend,
         ollama_model=ollama_model,
         chunk_seconds=chunk_seconds,
+        log_level=log_level,
     )
 
     if no_notes:
