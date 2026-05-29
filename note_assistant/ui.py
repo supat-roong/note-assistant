@@ -1,6 +1,7 @@
 """Textual TUI for Note Assistant — Enhanced with File Source and Language Selection."""
 from __future__ import annotations
 
+import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
@@ -153,8 +154,6 @@ class NoteAssistantUI(App):
 
     def _check_apple_intelligence(self) -> None:
         try:
-            import platform
-            from pathlib import Path
             label = self.query_one("#summarization-status", Label)
             ver_str = platform.mac_ver()[0]
             major = int(ver_str.split(".")[0]) if ver_str else 0
