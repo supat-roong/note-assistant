@@ -1,37 +1,7 @@
 import time
 import numpy as np
 import pytest
-from note_assistant.transcriber import BaseTranscriber
 from note_assistant.summarizer import BaseSummarizer
-
-
-class MockTranscriber(BaseTranscriber):
-    def __init__(self, text: str = "hello world"):
-        self._text = text
-        self.call_count = 0
-
-    def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
-        self.call_count += 1
-        return self._text
-
-
-class FailingTranscriber(BaseTranscriber):
-    def __init__(self):
-        self.call_count = 0
-
-    def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
-        self.call_count += 1
-        if self.call_count == 3:
-            raise RuntimeError("Simulated transcription failure")
-        return "test text"
-
-
-class MockSummarizer(BaseSummarizer):
-    def __init__(self, tokens=None):
-        self._tokens = tokens or ["summary"]
-
-    def summarize(self, transcript: str):
-        yield from self._tokens
 
 
 class SlowSummarizer(BaseSummarizer):
@@ -65,8 +35,9 @@ def test_worker_enqueue_is_non_blocking():
 
 def test_worker_processes_enqueued_window():
     results = []
+    from conftest import MockSummarizer
     worker = SummarizationWorker(
-        MockSummarizer(["result"]),
+        MockSummarizer(),
         on_summary_token=lambda t: None,
         on_summary_complete=results.append,
     )
@@ -74,10 +45,11 @@ def test_worker_processes_enqueued_window():
     worker.enqueue("some text")
     worker.stop()
     worker.join(timeout=2)
-    assert results == ["result"]
+    assert results == ["summary"]
 
 
 def test_worker_stops_via_sentinel():
+    from conftest import MockSummarizer
     worker = SummarizationWorker(
         MockSummarizer(),
         on_summary_token=lambda t: None,
@@ -91,6 +63,7 @@ def test_worker_stops_via_sentinel():
 
 def test_worker_drops_oldest_when_queue_full():
     from note_assistant.errors import error_bus
+    from conftest import MockSummarizer
     warnings = []
     error_bus.subscribe(lambda s, m, sev: warnings.append(sev) if sev == "warning" else None)
 
@@ -108,9 +81,10 @@ def test_worker_drops_oldest_when_queue_full():
 
 
 def test_worker_pauses_and_discards_windows():
+    from conftest import MockSummarizer
     processed = []
     worker = SummarizationWorker(
-        MockSummarizer(["token"]),
+        MockSummarizer(),
         on_summary_token=lambda t: None,
         on_summary_complete=processed.append,
     )
@@ -120,3 +94,69 @@ def test_worker_pauses_and_discards_windows():
     worker.stop()
     worker.join(timeout=2)
     assert processed == []
+
+
+# ---------------------------------------------------------------------------
+# NoteAssistantApp tests
+# ---------------------------------------------------------------------------
+
+from note_assistant.app import NoteAssistantApp
+from note_assistant.errors import error_bus
+
+
+def test_process_chunk_increments_count(mock_app):
+    chunk = np.ones(1600, dtype=np.float32)
+    mock_app._process_chunk(chunk)
+    assert mock_app.chunk_count == 1
+
+
+def test_process_chunk_calls_on_transcript(mock_app):
+    received = []
+    mock_app.on_transcript = received.append
+    chunk = np.ones(1600, dtype=np.float32)
+    mock_app._process_chunk(chunk)
+    assert received == ["hello world"]
+
+
+def test_process_chunk_skips_when_paused(mock_app):
+    mock_app._paused = True
+    chunk = np.ones(1600, dtype=np.float32)
+    mock_app._process_chunk(chunk)
+    assert mock_app.chunk_count == 0
+
+
+def test_pause_and_resume(mock_app):
+    mock_app.pause()
+    assert mock_app._paused is True
+    mock_app.resume()
+    assert mock_app._paused is False
+
+
+def test_error_recovery_continues_pipeline(mock_config, failing_transcriber, mock_summarizer):
+    errors = []
+    error_bus.subscribe(lambda s, m, sev: errors.append(m))
+    app = NoteAssistantApp(
+        mock_config,
+        transcriber=failing_transcriber,
+        summarizer=mock_summarizer,
+    )
+    chunk = np.zeros(1600, dtype=np.float32)
+    for _ in range(5):
+        app._process_chunk(chunk)
+    assert len(errors) == 1
+    assert app.chunk_count == 4  # chunks 1,2,4,5 succeeded; 3 failed
+
+
+def test_on_error_callback_fires(mock_config, failing_transcriber, mock_summarizer):
+    received = []
+    app = NoteAssistantApp(
+        mock_config,
+        transcriber=failing_transcriber,
+        summarizer=mock_summarizer,
+        on_error=lambda s, m, sev: received.append((s, m)),
+    )
+    chunk = np.zeros(1600, dtype=np.float32)
+    for _ in range(3):
+        app._process_chunk(chunk)
+    assert len(received) == 1
+    assert received[0][0] == "transcriber"

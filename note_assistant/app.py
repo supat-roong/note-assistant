@@ -15,7 +15,7 @@ from .config import AppConfig
 from .errors import error_bus
 from .notes_writer import NotesWriter
 from .summarizer import BaseSummarizer, create_summarizer
-from .transcriber import create_transcriber
+from .transcriber import BaseTranscriber, create_transcriber
 
 
 class SummarizationWorker(threading.Thread):
@@ -77,31 +77,47 @@ class SummarizationWorker(threading.Thread):
 class NoteAssistantApp:
     """Orchestrates the full pipeline: audio → transcribe → summarize → notes."""
 
-    def __init__(self, config: AppConfig, on_transcript: Callable[[str], None] | None = None,
-                 on_summary: Callable[[str], None] | None = None,
-                 on_chunk: Callable[[], None] | None = None):
+    def __init__(
+        self,
+        config: AppConfig,
+        on_transcript: Callable[[str], None] | None = None,
+        on_summary: Callable[[str], None] | None = None,
+        on_chunk: Callable[[], None] | None = None,
+        on_error: Callable[[str, str, str], None] | None = None,
+        transcriber: "BaseTranscriber | None" = None,
+        summarizer: "BaseSummarizer | None" = None,
+    ):
         self.config = config
         self.on_transcript = on_transcript or (lambda x: None)
         self.on_summary = on_summary or (lambda x: None)
         self.on_chunk = on_chunk or (lambda: None)
+        self.on_error = on_error or (lambda s, m, sev: None)
 
-        self._transcriber = create_transcriber(config.transcription)
-        self._summarizer = create_summarizer(
+        self._transcriber = transcriber or create_transcriber(config.transcription)
+        self._summarizer = summarizer or create_summarizer(
             config.summarization,
             language_input=config.language_input,
-            language_output=config.language_output
+            language_output=config.language_output,
         )
         self._audio = AudioSource(config.audio)
         self._notes: NotesWriter | None = None
         self._running = False
+        self._paused = False
 
-        self._transcript_buffer: list[str] = []
+        self._since_last_summary: list[str] = []
         self._full_transcript: list[str] = []
         self._full_summary = ""
         self._chunk_count = 0
         self._start_time: datetime | None = None
 
-        # Output directory
+        self._worker = SummarizationWorker(
+            self._summarizer,
+            on_summary_token=self.on_summary,
+            on_summary_complete=self._on_summary_complete,
+        )
+
+        error_bus.subscribe(self._route_error)
+
         if config.output.save_transcript or config.output.save_summary:
             config.output.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -122,14 +138,26 @@ class NoteAssistantApp:
         return self._chunk_count
 
     # ------------------------------------------------------------------
+    # Public control
+    # ------------------------------------------------------------------
+
+    def pause(self) -> None:
+        self._paused = True
+        self._worker.pause()
+
+    def resume(self) -> None:
+        self._paused = False
+        self._worker.resume()
+
+    # ------------------------------------------------------------------
     # Main loop
     # ------------------------------------------------------------------
 
     def run(self) -> None:
         self._running = True
         self._start_time = datetime.now()
+        self._worker.start()
 
-        # Open Apple Notes session
         if self.config.output.apple_notes:
             self._notes = NotesWriter(self.config.output.apple_notes_title)
             self._notes.open_session()
@@ -145,6 +173,7 @@ class NoteAssistantApp:
 
     def stop(self) -> None:
         self._running = False
+        self._worker.stop()
         self._audio.stop()
 
     # ------------------------------------------------------------------
@@ -152,44 +181,43 @@ class NoteAssistantApp:
     # ------------------------------------------------------------------
 
     def _process_chunk(self, audio: np.ndarray) -> None:
-        # Transcribe
-        text = self._transcriber.transcribe(audio, self.config.audio.sample_rate)
+        if self._paused:
+            return
+
+        try:
+            text = self._transcriber.transcribe(audio, self.config.audio.sample_rate)
+        except Exception as e:
+            logger.error("Transcription error: %s", e)
+            error_bus.emit("transcriber", str(e))
+            return
+
         if not text:
             return
 
         self._chunk_count += 1
-        self._transcript_buffer.append(text)
+        self._since_last_summary.append(text)
         self._full_transcript.append(text)
         self.on_transcript(text)
 
         if self._notes:
-            self._notes.append_transcript(text + " ")
+            self._notes.append_transcript(text)
 
-        # Summarize every N chunks
         if self._chunk_count % self.config.summarization.summarize_every == 0:
-            self._trigger_summarization()
+            window = " ".join(self._since_last_summary)
+            self._since_last_summary = []
+            self._worker.enqueue(window)
 
-    def _trigger_summarization(self) -> None:
-        window = " ".join(self._transcript_buffer)
-        self._transcript_buffer.clear()
+    def _on_summary_complete(self, summary: str) -> None:
+        self._full_summary = summary
+        if self._notes:
+            self._notes.update_summary(summary)
 
-        summary_tokens: list[str] = []
-
-        def _stream():
-            for token in self._summarizer.summarize(window):
-                summary_tokens.append(token)
-                self.on_summary(token)
-
-        t = threading.Thread(target=_stream, daemon=True)
-        t.start()
-        t.join(timeout=30)
-
-        if summary_tokens:
-            self._full_summary = "".join(summary_tokens)
-            if self._notes:
-                self._notes.update_summary(self._full_summary)
+    def _route_error(self, source: str, message: str, severity: str) -> None:
+        self.on_error(source, message, severity)
 
     def _shutdown(self) -> None:
+        self._worker.join(timeout=5)
+
         if self._notes:
             self._notes.close_session()
 
