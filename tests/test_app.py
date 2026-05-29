@@ -119,7 +119,7 @@ def test_process_chunk_calls_on_transcript(mock_app):
 
 
 def test_process_chunk_skips_when_paused(mock_app):
-    mock_app._paused = True
+    mock_app.pause()
     chunk = np.ones(1600, dtype=np.float32)
     mock_app._process_chunk(chunk)
     assert mock_app.chunk_count == 0
@@ -127,9 +127,9 @@ def test_process_chunk_skips_when_paused(mock_app):
 
 def test_pause_and_resume(mock_app):
     mock_app.pause()
-    assert mock_app._paused is True
+    assert mock_app._paused_event.is_set()
     mock_app.resume()
-    assert mock_app._paused is False
+    assert not mock_app._paused_event.is_set()
 
 
 def test_error_recovery_continues_pipeline(mock_config, failing_transcriber, mock_summarizer):

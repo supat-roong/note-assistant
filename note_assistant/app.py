@@ -102,7 +102,7 @@ class NoteAssistantApp:
         self._audio = AudioSource(config.audio)
         self._notes: NotesWriter | None = None
         self._running = False
-        self._paused = False
+        self._paused_event = threading.Event()
 
         self._since_last_summary: list[str] = []
         self._full_transcript: list[str] = []
@@ -142,11 +142,11 @@ class NoteAssistantApp:
     # ------------------------------------------------------------------
 
     def pause(self) -> None:
-        self._paused = True
+        self._paused_event.set()
         self._worker.pause()
 
     def resume(self) -> None:
-        self._paused = False
+        self._paused_event.clear()
         self._worker.resume()
 
     # ------------------------------------------------------------------
@@ -181,7 +181,7 @@ class NoteAssistantApp:
     # ------------------------------------------------------------------
 
     def _process_chunk(self, audio: np.ndarray) -> None:
-        if self._paused:
+        if self._paused_event.is_set():
             return
 
         try:
@@ -216,7 +216,9 @@ class NoteAssistantApp:
         self.on_error(source, message, severity)
 
     def _shutdown(self) -> None:
+        self._worker.stop()
         self._worker.join(timeout=5)
+        error_bus.unsubscribe(self._route_error)
 
         if self._notes:
             self._notes.close_session()
