@@ -310,3 +310,14 @@ async def test_start_button_reads_auto_title_switch_on(ui_config):
         pilot.app.post_message(Button.Pressed(btn))
         await pilot.pause()
         assert received[0].output.auto_title is True
+
+
+async def test_done_view_hidden_by_default(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        assert not pilot.app.query_one("#done-view").display
+
+
+async def test_done_view_has_restart_and_quit_buttons(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        assert pilot.app.query_one("#restart-btn") is not None
+        assert pilot.app.query_one("#quit-btn") is not None

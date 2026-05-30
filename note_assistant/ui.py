@@ -142,6 +142,21 @@ class NoteAssistantUI(App):
         height: 1;
         background: $boost;
     }
+    #done-view {
+        display: none;
+        align: center middle;
+        height: 1fr;
+    }
+    #done-label {
+        text-align: center;
+        margin-bottom: 2;
+    }
+    #done-buttons {
+        height: auto;
+    }
+    #done-buttons Button {
+        margin: 0 1;
+    }
     """
 
     def __init__(self, config: AppConfig, on_start_pipeline: Callable[[AppConfig], None]):
@@ -238,6 +253,13 @@ class NoteAssistantUI(App):
                 with ScrollableContainer(id="summary-panel"):
                     yield Label("✨ Summary")
                     yield RichLog(id="summary-log", wrap=True)
+
+        # Done View
+        with Vertical(id="done-view"):
+            yield Label("✅ Recording stopped.", id="done-label")
+            with Horizontal(id="done-buttons"):
+                yield Button("🔄 Restart", variant="primary", id="restart-btn")
+                yield Button("✖ Quit", variant="error", id="quit-btn")
 
         yield StatusBar(id="status-bar")
         yield Footer()
