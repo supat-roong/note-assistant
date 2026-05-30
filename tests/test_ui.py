@@ -345,6 +345,37 @@ async def test_stop_button_shows_done_view_not_exit(ui_config):
         assert pilot.app.query_one("#done-view").display
 
 
+async def test_restart_button_shows_settings_view(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.query_one("#recording-view").display = True
+        pilot.app.query_one("#settings-view").display = False
+        pilot.app._show_done_view()
+        await pilot.pause()
+        btn = pilot.app.query_one("#restart-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert pilot.app.query_one("#settings-view").display
+        assert not pilot.app.query_one("#done-view").display
+
+
+async def test_restart_resets_internal_state(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app._chunk_count = 5
+        pilot.app._paused = True
+        pilot.app._pipeline = MagicMock()
+        pilot.app.query_one("#recording-view").display = True
+        pilot.app.query_one("#settings-view").display = False
+        pilot.app._show_done_view()
+        await pilot.pause()
+        btn = pilot.app.query_one("#restart-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert pilot.app._chunk_count == 0
+        assert pilot.app._paused is False
+        assert pilot.app._pipeline is None
+        assert pilot.app._last_chunk_at is None
+
+
 async def test_push_progress_at_100_shows_done_view(ui_config):
     exited = []
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:

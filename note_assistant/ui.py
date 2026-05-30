@@ -323,6 +323,17 @@ class NoteAssistantUI(App):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "stop-btn":
             self._show_done_view()
+        elif event.button.id == "restart-btn":
+            self.query_one("#done-view").display = False
+            self.query_one("#transcript-log", RichLog).clear()
+            self.query_one("#summary-log", RichLog).clear()
+            self.query_one("#elapsed-label", Label).update("00:00")
+            self.query_one("#file-progress").display = False
+            self._chunk_count = 0
+            self._last_chunk_at = None
+            self._paused = False
+            self._pipeline = None
+            self.query_one("#settings-view").display = True
         elif event.button.id == "browse-btn":
             self.run_worker(_run_file_picker, thread=True, name="browse-file")
         elif event.button.id == "start-btn":
