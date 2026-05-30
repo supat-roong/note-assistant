@@ -121,8 +121,6 @@ class AppleSpeechTranscriber(BaseTranscriber):
             self._proc.terminate()
         self._proc = None
 
-        return result_text.strip()
-
 
 # ---------------------------------------------------------------------------
 # faster-whisper backend
