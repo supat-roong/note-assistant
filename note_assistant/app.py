@@ -72,14 +72,14 @@ class SummarizationWorker(threading.Thread):
                 error_bus.emit("summarizer", str(e))
 
     async def _process_async(self, window: str) -> None:
-        tokens: list[str] = []
-        async for token in self._summarizer.summarize(window):
-            if not tokens:
+        last = ""
+        async for chunk in self._summarizer.summarize(window):
+            if not last:
                 self._on_summary_start()
-            tokens.append(token)
-            self._on_summary_token(token)
-        if tokens:
-            self._on_summary_complete("".join(tokens))
+            last = chunk
+            self._on_summary_token(chunk)  # cumulative — UI must replace, not append
+        if last:
+            self._on_summary_complete(last)
 
 
 class NoteAssistantApp:
