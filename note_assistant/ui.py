@@ -36,12 +36,15 @@ class NoteAssistantUI(App):
     #settings-view {
         padding: 1 2;
         background: $surface;
+        height: auto;
+        overflow-y: auto;
     }
     #recording-view {
         display: none;
         height: 1fr;
     }
     .setting-group {
+        height: auto;
         margin-bottom: 1;
         padding: 1;
         border: solid $accent;
@@ -60,8 +63,12 @@ class NoteAssistantUI(App):
         margin-bottom: 1;
     }
     #lang-row > Vertical {
+        height: auto;
         width: 1fr;
         padding: 0 1;
+    }
+    .setting-group > Horizontal {
+        height: auto;
     }
     #transcript-panel {
         width: 1fr;
