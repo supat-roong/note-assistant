@@ -32,7 +32,9 @@ class SummarizationConfig(BaseModel):
     backend: Literal["apple", "mlx", "ollama"] = "apple"
     summarize_every: int = Field(3, ge=1)
     prompt_template: str = (
-        "Summarize the following transcript into concise bullet-point notes:\n{transcript}"
+        "Summarize the following transcript into concise bullet-point notes.\n"
+        "Write each bullet point on its own line starting with '- '.\n\n"
+        "{transcript}"
     )
     mlx_model: str = "mlx-community/Llama-3.2-3B-Instruct-4bit"
     ollama_model: str = "llama3.2:3b"

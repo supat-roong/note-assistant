@@ -64,17 +64,22 @@ class SummarizationWorker(threading.Thread):
         self._q.put(None)
 
     def run(self) -> None:
-        while True:
-            window = self._q.get()
-            if window is None:
-                break
-            if self._paused_event.is_set():
-                continue
-            try:
-                asyncio.run(self._process_async(window))
-            except Exception as e:
-                logger.error("Summarization error: %s", e)
-                error_bus.emit("summarizer", str(e))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            while True:
+                window = self._q.get()
+                if window is None:
+                    break
+                if self._paused_event.is_set():
+                    continue
+                try:
+                    loop.run_until_complete(self._process_async(window))
+                except Exception as e:
+                    logger.error("Summarization error: %s", e)
+                    error_bus.emit("summarizer", str(e))
+        finally:
+            loop.close()
 
     async def _process_async(self, window: str) -> None:
         last = ""
@@ -249,7 +254,13 @@ class NoteAssistantApp:
 
         if self._notes and self._full_summary:
             try:
-                title = asyncio.run(self._summarizer.generate_title(self._full_summary))
+                loop = asyncio.new_event_loop()
+                try:
+                    title = loop.run_until_complete(
+                        self._summarizer.generate_title(self._full_summary)
+                    )
+                finally:
+                    loop.close()
                 if title:
                     new_name = f"{title} — {self._notes._date_str} #Note Assistant"
                     self._notes.set_title(new_name)
