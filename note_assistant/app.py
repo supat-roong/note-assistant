@@ -38,15 +38,20 @@ class SummarizationWorker(threading.Thread):
         self._on_summary_start = on_summary_start or (lambda: None)
         self._q: queue.Queue[str | None] = queue.Queue()
         self._paused_event = threading.Event()
+        self._last_queue_warning = 0.0
 
     def enqueue(self, window: str) -> None:
+        import time
         if self._q.qsize() >= self.MAX_QUEUE_DEPTH:
             try:
                 self._q.get_nowait()
             except queue.Empty:
                 pass
             logger.warning("summarization queue full — dropping window")
-            error_bus.emit("summarizer", "Queue full — dropping oldest window", "warning")
+            now = time.monotonic()
+            if now - self._last_queue_warning > 10.0:
+                self._last_queue_warning = now
+                error_bus.emit("summarizer", "Queue full — dropping oldest window", "warning")
         self._q.put(window)
 
     def pause(self) -> None:
