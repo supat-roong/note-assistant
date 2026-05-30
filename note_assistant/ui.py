@@ -210,7 +210,10 @@ class NoteAssistantUI(App):
                     self.notify("Error: Please provide a file path", severity="error")
                     return
                 self._config.audio.file_path = Path(path_str)
-            
+                if not self._config.audio.file_path.exists():
+                    self.notify("Error: File not found", severity="error")
+                    return
+
             self._config.language_input = self.query_one("#lang-input", Select).value
             self._config.language_output = self.query_one("#lang-output", Select).value
             self._config.transcription.backend = self.query_one("#t-backend", Select).value

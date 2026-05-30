@@ -88,6 +88,21 @@ async def test_file_path_input_visible_for_file_source(ui_config):
         assert pilot.app.query_one("#file-path").display
 
 
+async def test_start_with_nonexistent_file_shows_error(ui_config, tmp_path):
+    ui_config.audio.source = "file"
+    notified = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.notify = lambda msg, **kw: notified.append(msg)
+        pilot.app._update_file_input_visibility("file")
+        await pilot.pause()
+        pilot.app.query_one("#file-path").value = str(tmp_path / "missing.wav")
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert any("not found" in n.lower() for n in notified)
+        assert pilot.app.query_one("#settings-view").display
+
+
 async def test_backend_labels_present(ui_config):
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
         label_texts = [str(w._Static__content) for w in pilot.app.query("Label")]
