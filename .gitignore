@@ -24,7 +24,7 @@ notes/
 config.yaml
 
 # Project-specific: binary test files
-media/sample.mp3
+media/sample*
 
 # Personal AI instructions
 CLAUDE.md
