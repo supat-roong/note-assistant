@@ -19,6 +19,7 @@ class NotesWriter:
         )
         self._last_flush = 0.0
         self._throttle_secs = 1.0
+        self._note_id: str = ""
         self._note_created = False
         self._transcript_lines: list[str] = []
         self._summary: str = ""
@@ -26,8 +27,8 @@ class NotesWriter:
 
     def open_session(self) -> None:
         header = f"# {self._title}\n\n---\n\n## Transcript\n\n"
-        self._create_note(header)
-        self._note_created = True
+        self._note_id = self._create_note(header)
+        self._note_created = bool(self._note_id)
 
     def append_transcript(self, text: str) -> None:
         self._transcript_lines.append(text)
@@ -61,30 +62,33 @@ class NotesWriter:
 
         script = f"""
         tell application "Notes"
-            set targetNote to first note whose name is "{self._title}"
+            set targetNote to note id "{self._note_id}"
             set body of targetNote to "{self._escape(body)}"
         end tell
         """
         self._run_osascript(script)
 
-    def _create_note(self, body: str) -> None:
+    def _create_note(self, body: str) -> str:
         script = f"""
         tell application "Notes"
-            make new note at folder "Notes" with properties {{name:"{self._title}", body:"{self._escape(body)}"}}
+            set newNote to make new note at folder "Notes" with properties {{name:"{self._title}", body:"{self._escape(body)}"}}
+            return id of newNote
         end tell
         """
-        self._run_osascript(script)
+        return self._run_osascript(script)
 
     @staticmethod
-    def _run_osascript(script: str) -> None:
+    def _run_osascript(script: str) -> str:
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ["osascript", "-e", script],
                 capture_output=True,
+                text=True,
                 timeout=5,
             )
+            return result.stdout.strip()
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+            return ""
 
     @staticmethod
     def _escape(text: str) -> str:
