@@ -228,6 +228,7 @@ class NoteAssistantUI(App):
     def on_mount(self) -> None:
         self._check_apple_intelligence()
         self._update_file_input_visibility(self._config.audio.source)
+        self._update_transcription_for_lang(self._config.language_input)
         self.set_interval(1.0, self._tick_elapsed)
 
     def _tick_elapsed(self) -> None:
@@ -253,9 +254,27 @@ class NoteAssistantUI(App):
         except Exception:
             pass
 
+    _LANG_TO_WHISPER: dict[str, str | None] = {
+        "English": "en",
+        "Thai": "th",
+        "Japanese": "ja",
+        "Chinese": "zh",
+        "Auto": None,
+    }
+
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "audio-source":
             self._update_file_input_visibility(event.value)
+        elif event.select.id == "lang-input":
+            self._update_transcription_for_lang(event.value)
+
+    def _update_transcription_for_lang(self, lang: str) -> None:
+        t_backend = self.query_one("#t-backend", Select)
+        if lang == "Auto":
+            t_backend.value = "faster-whisper"
+            t_backend.disabled = True
+        else:
+            t_backend.disabled = False
 
     def _update_file_input_visibility(self, source: str) -> None:
         row = self.query_one("#file-path-row")
@@ -281,7 +300,11 @@ class NoteAssistantUI(App):
 
             self._config.language_input = self.query_one("#lang-input", Select).value
             self._config.language_output = self.query_one("#lang-output", Select).value
-            self._config.transcription.backend = self.query_one("#t-backend", Select).value
+            self._config.transcription.language = self._LANG_TO_WHISPER.get(self._config.language_input)
+            if self._config.language_input == "Auto":
+                self._config.transcription.backend = "faster-whisper"
+            else:
+                self._config.transcription.backend = self.query_one("#t-backend", Select).value
             self._config.summarization.backend = self.query_one("#s-backend", Select).value
             
             self.query_one("#settings-view").display = False
