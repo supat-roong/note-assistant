@@ -59,7 +59,7 @@ class BaseSummarizer(ABC):
         return
         yield  # pragma: no cover — marks this as an async generator
 
-    async def generate_title(self, summary: str) -> str:
+    async def generate_title(self, summary: str, title_prompt_template: str) -> str:
         """Generate a short title (≤5 words) from the summary. Override in subclasses."""
         return ""
 
@@ -132,15 +132,9 @@ class AppleFoundationSummarizer(BaseSummarizer):
         except fm.AssetsUnavailableError as e:
             raise RuntimeError(f"Apple Intelligence assets unavailable: {e}") from e
 
-    async def generate_title(self, summary: str) -> str:
-        # Try requested output language first, fall back to English if unsupported
+    async def generate_title(self, summary: str, title_prompt_template: str) -> str:
         for lang in [self.language_output, "English"]:
-            prompt = (
-                f"Generate a concise, informative title of 5 words or less for these notes. "
-                f"Write the title in {lang}. "
-                "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
-                + summary[:1000]
-            )
+            prompt = title_prompt_template.format(language=lang, summary=summary[:1000])
             result = ""
             try:
                 session = self._fm.LanguageModelSession()
@@ -268,13 +262,8 @@ class OllamaSummarizer(BaseSummarizer):
             if token:
                 yield token
 
-    async def generate_title(self, summary: str) -> str:
-        prompt = (
-            f"Generate a concise, informative title of 5 words or less for these notes. "
-            f"Write the title in {self.language_output}. "
-            "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
-            + summary[:1000]
-        )
+    async def generate_title(self, summary: str, title_prompt_template: str) -> str:
+        prompt = title_prompt_template.format(language=self.language_output, summary=summary[:1000])
         response = await self._ollama.chat(
             model=self._model_name,
             messages=[{"role": "user", "content": prompt}],

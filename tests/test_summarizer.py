@@ -104,3 +104,40 @@ async def test_apple_summarizer_streams_tokens():
         s = AppleFoundationSummarizer(SummarizationConfig())
         result = "".join([t async for t in s.summarize("meeting notes")])
         assert result == "bullet one"
+
+
+async def test_ollama_generate_title_uses_template():
+    with patch.object(OllamaSummarizer, "_load"):
+        cfg = SummarizationConfig(backend="ollama", ollama_model="llama3.2:3b")
+        s = OllamaSummarizer(cfg, "English", "English")
+        s._ollama = MagicMock()
+        s._ollama.chat = AsyncMock(return_value={"message": {"content": "My Title"}})
+        template = "Title in {language}:\n\n{summary}"
+        result = await s.generate_title("- bullet one\n- bullet two", template)
+        assert result == "My Title"
+        sent = s._ollama.chat.call_args.kwargs["messages"][0]["content"]
+        assert "English" in sent
+        assert "bullet one" in sent
+
+
+async def test_ollama_generate_title_strips_punctuation():
+    with patch.object(OllamaSummarizer, "_load"):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg, "English", "English")
+        s._ollama = MagicMock()
+        s._ollama.chat = AsyncMock(return_value={"message": {"content": '"Title."'}})
+        result = await s.generate_title("notes", "t {language} {summary}")
+        assert result == "Title"
+
+
+def test_base_summarizer_generate_title_returns_empty():
+    from note_assistant.summarizer import BaseSummarizer
+    import asyncio
+
+    class Minimal(BaseSummarizer):
+        async def summarize(self, transcript):
+            yield ""
+
+    s = Minimal()
+    result = asyncio.run(s.generate_title("summary text", "prompt {language} {summary}"))
+    assert result == ""
