@@ -189,6 +189,69 @@ class FasterWhisperTranscriber(BaseTranscriber):
 
 
 # ---------------------------------------------------------------------------
+# mlx-whisper backend (Apple Silicon — Metal/Neural Engine)
+# ---------------------------------------------------------------------------
+
+class MLXWhisperTranscriber(BaseTranscriber):
+    """Uses mlx-whisper for transcription on Apple Silicon via Metal.
+
+    Model download is deferred to a background thread so the pipeline
+    starts immediately. transcribe() skips chunks silently while the
+    model is still downloading (first run only).
+    """
+
+    def __init__(self, config: TranscriptionConfig):
+        self.config = config
+        self._mlx_whisper = None
+        self._model_path: str | None = None
+        self._load_error: str | None = None
+        self._error_emitted = False
+        self._ready = threading.Event()
+        try:
+            import mlx_whisper  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError(
+                "mlx-whisper not installed. Run: uv pip install mlx-whisper"
+            ) from e
+        threading.Thread(target=self._load, daemon=True, name="mlx-whisper-load").start()
+
+    def _load(self) -> None:
+        try:
+            import mlx_whisper
+            from huggingface_hub import snapshot_download
+            logger.info("Downloading/caching MLX Whisper model '%s'…", self.config.mlx_whisper_model)
+            self._model_path = snapshot_download(repo_id=self.config.mlx_whisper_model)
+            self._mlx_whisper = mlx_whisper
+            logger.info("MLX Whisper model ready.")
+        except Exception as e:
+            self._load_error = str(e)
+            logger.error("Failed to load MLX Whisper model: %s", e, exc_info=True)
+        finally:
+            self._ready.set()
+
+    def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
+        if not self._ready.is_set():
+            return ""  # model still loading — skip this chunk
+        if self._load_error:
+            if not self._error_emitted:
+                self._error_emitted = True
+                raise RuntimeError(f"MLX Whisper model failed to load: {self._load_error}")
+            return ""
+        if self._mlx_whisper is None:
+            return ""
+        kwargs: dict = {}
+        if self.config.language:
+            kwargs["language"] = self.config.language
+        result = self._mlx_whisper.transcribe(
+            audio,
+            path_or_hf_repo=self._model_path,
+            verbose=False,
+            **kwargs,
+        )
+        return result.get("text", "").strip()
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -198,6 +261,9 @@ _REGISTRY: dict[str, type[BaseTranscriber]] = {
 
 if platform.system() == "Darwin":
     _REGISTRY["apple"] = AppleSpeechTranscriber
+
+if platform.system() == "Darwin" and platform.machine() == "arm64":
+    _REGISTRY["mlx-whisper"] = MLXWhisperTranscriber
 
 
 def create_transcriber(config: TranscriptionConfig) -> BaseTranscriber:

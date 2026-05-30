@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from unittest.mock import patch, Mock
 from note_assistant.transcriber import (
-    FasterWhisperTranscriber, create_transcriber, _REGISTRY
+    FasterWhisperTranscriber, MLXWhisperTranscriber, create_transcriber, _REGISTRY
 )
 from note_assistant.config import TranscriptionConfig
 
@@ -61,3 +61,70 @@ def test_transcription_config_has_mlx_whisper_model_field():
 def test_transcription_config_mlx_whisper_model_default():
     cfg = TranscriptionConfig()
     assert cfg.mlx_whisper_model == "mlx-community/whisper-base-mlx"
+
+
+@pytest.mark.skipif(platform.machine() != "arm64", reason="arm64 only")
+def test_registry_contains_mlx_whisper_on_arm64():
+    assert "mlx-whisper" in _REGISTRY
+
+
+def test_mlx_whisper_transcribes_text():
+    with patch.object(MLXWhisperTranscriber, "_load"):
+        cfg = TranscriptionConfig(backend="mlx-whisper", mlx_whisper_model="mlx-community/whisper-base-mlx")
+        t = MLXWhisperTranscriber(cfg)
+        t._ready.set()
+        mock_mlx = Mock()
+        mock_mlx.transcribe.return_value = {"text": " Hello world"}
+        t._mlx_whisper = mock_mlx
+        audio = np.ones(1600, dtype=np.float32)
+        assert t.transcribe(audio, 16000) == "Hello world"
+
+
+def test_mlx_whisper_skips_while_loading():
+    with patch.object(MLXWhisperTranscriber, "_load"):
+        cfg = TranscriptionConfig(backend="mlx-whisper")
+        t = MLXWhisperTranscriber(cfg)
+        # _ready not set — model still loading
+        audio = np.ones(1600, dtype=np.float32)
+        assert t.transcribe(audio, 16000) == ""
+
+
+def test_mlx_whisper_surfaces_load_error_once():
+    with patch.object(MLXWhisperTranscriber, "_load"):
+        cfg = TranscriptionConfig(backend="mlx-whisper")
+        t = MLXWhisperTranscriber(cfg)
+        t._load_error = "download failed"
+        t._ready.set()
+        audio = np.ones(1600, dtype=np.float32)
+        with pytest.raises(RuntimeError, match="MLX Whisper model failed to load"):
+            t.transcribe(audio, 16000)
+        # second call is silent
+        assert t.transcribe(audio, 16000) == ""
+
+
+def test_mlx_whisper_passes_language_to_transcribe():
+    with patch.object(MLXWhisperTranscriber, "_load"):
+        cfg = TranscriptionConfig(backend="mlx-whisper", language="th")
+        t = MLXWhisperTranscriber(cfg)
+        t._ready.set()
+        mock_mlx = Mock()
+        mock_mlx.transcribe.return_value = {"text": "สวัสดี"}
+        t._mlx_whisper = mock_mlx
+        audio = np.ones(1600, dtype=np.float32)
+        t.transcribe(audio, 16000)
+        _, kwargs = mock_mlx.transcribe.call_args
+        assert kwargs.get("language") == "th"
+
+
+def test_mlx_whisper_auto_language_omits_language_kwarg():
+    with patch.object(MLXWhisperTranscriber, "_load"):
+        cfg = TranscriptionConfig(backend="mlx-whisper", language=None)
+        t = MLXWhisperTranscriber(cfg)
+        t._ready.set()
+        mock_mlx = Mock()
+        mock_mlx.transcribe.return_value = {"text": "hello"}
+        t._mlx_whisper = mock_mlx
+        audio = np.ones(1600, dtype=np.float32)
+        t.transcribe(audio, 16000)
+        _, kwargs = mock_mlx.transcribe.call_args
+        assert "language" not in kwargs
