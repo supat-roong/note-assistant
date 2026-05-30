@@ -217,7 +217,12 @@ class MLXWhisperTranscriber(BaseTranscriber):
     def _load(self) -> None:
         try:
             import mlx_whisper
+            from mlx_whisper.transcribe import ModelHolder
+            import mlx.core as mx
             logger.info("Loading MLX Whisper model '%s'…", self.config.mlx_whisper_model)
+            # Pre-warm ModelHolder so the first transcribe() call doesn't block the pipeline.
+            # ModelHolder caches the model in memory; subsequent calls reuse it.
+            ModelHolder.get_model(self.config.mlx_whisper_model, mx.float16)
             self._mlx_whisper = mlx_whisper
             logger.info("MLX Whisper model ready.")
         except Exception as e:
@@ -242,7 +247,7 @@ class MLXWhisperTranscriber(BaseTranscriber):
         result = self._mlx_whisper.transcribe(
             audio,
             path_or_hf_repo=self.config.mlx_whisper_model,
-            verbose=False,
+            verbose=None,  # None = no stdout — False still prints "Detected language" etc.
             **kwargs,
         )
         return result.get("text", "").strip()
