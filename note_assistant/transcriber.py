@@ -84,10 +84,12 @@ class AppleSpeechTranscriber(BaseTranscriber):
         buf = AVFoundation.AVAudioPCMBuffer.alloc().initWithPCMFormat_frameCapacity_(fmt, capacity)
         buf.setFrameLength_(capacity)
 
-        # Copy numpy data into the buffer's float channel data
-        import ctypes
+        # Copy numpy data into the buffer's float channel data.
+        # objc.varlist (returned by floatChannelData) is not accepted by ctypes.memmove;
+        # use as_buffer() + memoryview byte copy instead.
+        src_bytes = audio.tobytes()
         channel_data = buf.floatChannelData()[0]
-        ctypes.memmove(channel_data, audio.tobytes(), audio.nbytes)
+        memoryview(channel_data.as_buffer(len(src_bytes))).cast("B")[:len(src_bytes)] = memoryview(src_bytes).cast("B")
 
         recognizer = Speech.SFSpeechRecognizer.alloc().initWithLocale_(
             Foundation.NSLocale.currentLocale()
@@ -95,7 +97,7 @@ class AppleSpeechTranscriber(BaseTranscriber):
         if not recognizer:
             return ""
 
-        recognizer.setRequiresOnDeviceRecognition_(True)
+        recognizer.setSupportsOnDeviceRecognition_(True)
         if not recognizer.isAvailable():
             logger.error("SFSpeechRecognizer not available — check System Settings")
             return ""
@@ -105,7 +107,7 @@ class AppleSpeechTranscriber(BaseTranscriber):
             return ""
         
         request.appendAudioPCMBuffer_(buf)
-        request.setEndAudio_(True)
+        request.endAudio()
 
         result_text = ""
         done = threading.Event()
@@ -122,10 +124,16 @@ class AppleSpeechTranscriber(BaseTranscriber):
                 done.set()
 
         task = recognizer.recognitionTaskWithRequest_resultHandler_(request, handler)
-        # Wait up to 5s for the response
-        if not done.wait(timeout=5.0):
+        # Pump the RunLoop so Speech framework callbacks can fire on this thread.
+        # done.wait() alone doesn't work because Speech callbacks require an active RunLoop.
+        import time
+        from CoreFoundation import CFRunLoopRunInMode, kCFRunLoopDefaultMode
+        deadline = time.monotonic() + 5.0
+        while not done.is_set() and time.monotonic() < deadline:
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, True)
+        if not done.is_set():
             logger.debug("Recognition timed out for chunk")
-            
+
         return result_text.strip()
 
 
