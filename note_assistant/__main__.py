@@ -108,6 +108,13 @@ def _launch(config: AppConfig) -> None:
         def on_progress(current: int, total: int) -> None:
             ui.call_from_thread(ui.push_progress, current, total)
 
+        if updated_config.transcription.backend == "faster-whisper":
+            ui.call_from_thread(
+                ui.push_error,
+                "pipeline",
+                f"Loading Whisper '{updated_config.transcription.whisper_model}' model — transcription will start once ready…",
+                "warning",
+            )
         try:
             pipeline = NoteAssistantApp(
                 updated_config,

@@ -127,33 +127,51 @@ class AppleSpeechTranscriber(BaseTranscriber):
 # ---------------------------------------------------------------------------
 
 class FasterWhisperTranscriber(BaseTranscriber):
-    """Uses faster-whisper (CTranslate2) for transcription."""
+    """Uses faster-whisper (CTranslate2) for transcription.
+
+    Model loading is deferred to a background thread so the pipeline
+    starts immediately. transcribe() skips chunks silently while the
+    model is still initialising (which can take 10-60 s on first run).
+    """
 
     def __init__(self, config: TranscriptionConfig):
         self.config = config
         self._model = None
-        self._load()
-
-    def _load(self) -> None:
+        self._load_error: str | None = None
+        self._ready = threading.Event()
+        # Fail fast if the package is missing — before spawning anything.
         try:
-            from faster_whisper import WhisperModel
+            import faster_whisper  # noqa: F401
         except ImportError as e:
             raise RuntimeError(
                 "faster-whisper not installed. Run: uv pip install faster-whisper"
             ) from e
+        threading.Thread(target=self._load, daemon=True, name="whisper-load").start()
 
-        device = self.config.device
-        if device == "auto":
-            device = "cpu"  # CTranslate2 auto-selects best available
-
-        from faster_whisper import WhisperModel
-        self._model = WhisperModel(
-            self.config.whisper_model,
-            device=device,
-            compute_type="int8",
-        )
+    def _load(self) -> None:
+        try:
+            from faster_whisper import WhisperModel
+            device = self.config.device
+            if device == "auto":
+                device = "cpu"  # CTranslate2 auto-selects best available
+            logger.info("Loading Whisper model '%s' on %s…", self.config.whisper_model, device)
+            self._model = WhisperModel(
+                self.config.whisper_model,
+                device=device,
+                compute_type="int8",
+            )
+            logger.info("Whisper model ready.")
+        except Exception as e:
+            self._load_error = str(e)
+            logger.error("Failed to load Whisper model: %s", e)
+        finally:
+            self._ready.set()
 
     def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
+        if not self._ready.is_set():
+            return ""  # model still loading — skip this chunk
+        if self._load_error:
+            raise RuntimeError(f"Whisper model failed to load: {self._load_error}")
         if self._model is None:
             return ""
         segments, _ = self._model.transcribe(
