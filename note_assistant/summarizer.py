@@ -14,6 +14,8 @@ from note_assistant import logger
 # ---------------------------------------------------------------------------
 
 class BaseSummarizer(ABC):
+    TOKEN_LIMIT: int | None = None  # None = no practical limit
+
     @abstractmethod
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         """Yield streaming summary tokens for the given transcript."""
@@ -33,6 +35,7 @@ class BaseSummarizer(ABC):
 
 class AppleFoundationSummarizer(BaseSummarizer):
     """Uses Apple Foundation Models via apple-fm-sdk (requires macOS 26+, Apple Silicon)."""
+    TOKEN_LIMIT = 4096
 
     def __init__(
         self,
@@ -116,6 +119,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
 
 class MLXSummarizer(BaseSummarizer):
     """On-device summarization using MLX (Apple Silicon GPU). No Xcode needed."""
+    TOKEN_LIMIT = 40960
 
     DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 

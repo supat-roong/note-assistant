@@ -19,6 +19,11 @@ from .summarizer import BaseSummarizer, create_summarizer
 from .transcriber import BaseTranscriber, create_transcriber
 
 
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate: ~3 chars per token (conservative for multilingual text)."""
+    return max(1, len(text) // 3)
+
+
 def _is_repetitive(text: str, fragment_len: int = 30, max_count: int = 4) -> bool:
     """Return True if any substring of fragment_len chars appears more than max_count times."""
     if len(text) < fragment_len * (max_count + 1):
@@ -95,7 +100,15 @@ class SummarizationWorker(threading.Thread):
             loop.close()
 
     async def _process_async(self, window: str) -> None:
+        est_tokens = _estimate_tokens(window)
         for idx, summarizer in enumerate(self._summarizers):
+            limit = summarizer.TOKEN_LIMIT
+            if limit and est_tokens > int(limit * 0.85):
+                logger.info(
+                    "Skipping backend %d: ~%d tokens exceeds %.0f%% of %d-token limit",
+                    idx, est_tokens, 85, limit,
+                )
+                continue
             last = ""
             try:
                 async for chunk in summarizer.summarize(window):
@@ -297,11 +310,18 @@ class NoteAssistantApp:
 
         if self._notes and self._full_summary:
             title = ""
+            est = _estimate_tokens(self._full_summary)
+            # Pick first summarizer whose token limit can fit the summary
+            title_summarizer = next(
+                (s for s in self._worker._summarizers
+                 if s.TOKEN_LIMIT is None or est <= int(s.TOKEN_LIMIT * 0.85)),
+                self._worker._summarizers[-1],
+            )
             try:
                 loop = asyncio.new_event_loop()
                 try:
                     title = loop.run_until_complete(
-                        self._summarizer.generate_title(self._full_summary)
+                        title_summarizer.generate_title(self._full_summary)
                     )
                 finally:
                     loop.close()
