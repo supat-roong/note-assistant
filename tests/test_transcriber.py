@@ -1,3 +1,4 @@
+import importlib.util
 import platform
 import numpy as np
 import pytest
@@ -6,6 +7,8 @@ from note_assistant.transcriber import (
     FasterWhisperTranscriber, MLXWhisperTranscriber, create_transcriber, _REGISTRY
 )
 from note_assistant.config import TranscriptionConfig
+
+_mlx_available = importlib.util.find_spec("mlx_whisper") is not None
 
 
 def test_registry_contains_expected_backends():
@@ -68,6 +71,7 @@ def test_registry_contains_mlx_whisper_on_arm64():
     assert "mlx-whisper" in _REGISTRY
 
 
+@pytest.mark.skipif(not _mlx_available, reason="mlx-whisper not installed")
 def test_mlx_whisper_transcribes_text():
     with patch.object(MLXWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="mlx-whisper", mlx_whisper_model="mlx-community/whisper-base-mlx")
@@ -80,6 +84,7 @@ def test_mlx_whisper_transcribes_text():
         assert t.transcribe(audio, 16000) == "Hello world"
 
 
+@pytest.mark.skipif(not _mlx_available, reason="mlx-whisper not installed")
 def test_mlx_whisper_skips_while_loading():
     with patch.object(MLXWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="mlx-whisper")
@@ -89,6 +94,7 @@ def test_mlx_whisper_skips_while_loading():
         assert t.transcribe(audio, 16000) == ""
 
 
+@pytest.mark.skipif(not _mlx_available, reason="mlx-whisper not installed")
 def test_mlx_whisper_surfaces_load_error_once():
     with patch.object(MLXWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="mlx-whisper")
@@ -102,6 +108,7 @@ def test_mlx_whisper_surfaces_load_error_once():
         assert t.transcribe(audio, 16000) == ""
 
 
+@pytest.mark.skipif(not _mlx_available, reason="mlx-whisper not installed")
 def test_mlx_whisper_passes_language_to_transcribe():
     with patch.object(MLXWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="mlx-whisper", language="th")
@@ -116,6 +123,7 @@ def test_mlx_whisper_passes_language_to_transcribe():
         assert kwargs.get("language") == "th"
 
 
+@pytest.mark.skipif(not _mlx_available, reason="mlx-whisper not installed")
 def test_mlx_whisper_auto_language_omits_language_kwarg():
     with patch.object(MLXWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="mlx-whisper", language=None)

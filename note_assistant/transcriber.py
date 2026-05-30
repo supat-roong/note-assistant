@@ -1,4 +1,4 @@
-"""Transcription backend — Apple Speech (default) or faster-whisper."""
+"""Transcription backend — Apple Speech, faster-whisper, or mlx-whisper."""
 from __future__ import annotations
 
 import platform
