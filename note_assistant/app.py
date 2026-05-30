@@ -29,11 +29,13 @@ class SummarizationWorker(threading.Thread):
         summarizer: BaseSummarizer,
         on_summary_token: Callable[[str], None],
         on_summary_complete: Callable[[str], None],
+        on_summary_start: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(daemon=True)
         self._summarizer = summarizer
         self._on_summary_token = on_summary_token
         self._on_summary_complete = on_summary_complete
+        self._on_summary_start = on_summary_start or (lambda: None)
         self._q: queue.Queue[str | None] = queue.Queue()
         self._paused_event = threading.Event()
 
@@ -72,6 +74,8 @@ class SummarizationWorker(threading.Thread):
     async def _process_async(self, window: str) -> None:
         tokens: list[str] = []
         async for token in self._summarizer.summarize(window):
+            if not tokens:
+                self._on_summary_start()
             tokens.append(token)
             self._on_summary_token(token)
         if tokens:
@@ -86,6 +90,7 @@ class NoteAssistantApp:
         config: AppConfig,
         on_transcript: Callable[[str], None] | None = None,
         on_summary: Callable[[str], None] | None = None,
+        on_summary_start: Callable[[], None] | None = None,
         on_chunk: Callable[[], None] | None = None,
         on_error: Callable[[str, str, str], None] | None = None,
         on_progress: Callable[[int, int], None] | None = None,
@@ -95,6 +100,7 @@ class NoteAssistantApp:
         self.config = config
         self.on_transcript = on_transcript or (lambda x: None)
         self.on_summary = on_summary or (lambda x: None)
+        self.on_summary_start = on_summary_start or (lambda: None)
         self.on_chunk = on_chunk or (lambda: None)
         self.on_error = on_error or (lambda s, m, sev: None)
         self.on_progress = on_progress or (lambda cur, tot: None)
@@ -120,6 +126,7 @@ class NoteAssistantApp:
             self._summarizer,
             on_summary_token=self.on_summary,
             on_summary_complete=self._on_summary_complete,
+            on_summary_start=self.on_summary_start,
         )
 
         error_bus.subscribe(self._route_error)

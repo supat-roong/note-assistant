@@ -316,6 +316,9 @@ class NoteAssistantUI(App):
         self.query_one("#transcript-log", RichLog).write(text + " ")
         self._update_status_bar()
 
+    def clear_summary(self) -> None:
+        self.query_one("#summary-log", RichLog).clear()
+
     def push_summary_token(self, token: str) -> None:
         self.query_one("#summary-log", RichLog).write(token, scroll_end=True)
 
