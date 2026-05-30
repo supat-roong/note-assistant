@@ -225,9 +225,8 @@ class NoteAssistantApp:
             self._notes.append_transcript(text)
 
         if self._chunk_count % self.config.summarization.summarize_every == 0:
-            window = " ".join(self._since_last_summary)
             self._since_last_summary = []
-            self._worker.enqueue(window)
+            self._worker.enqueue(" ".join(self._full_transcript))
 
     def _on_summary_complete(self, summary: str) -> None:
         self._full_summary = summary
