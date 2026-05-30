@@ -30,6 +30,7 @@ class NoteAssistantUI(App):
 
     BINDINGS = [
         Binding("ctrl+p", "toggle_pause", "Pause/Resume", priority=True),
+        Binding("ctrl+q", "quit", "Quit"),
     ]
 
     CSS = """

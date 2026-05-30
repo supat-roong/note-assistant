@@ -88,6 +88,12 @@ async def test_file_path_input_visible_for_file_source(ui_config):
         assert pilot.app.query_one("#file-path").display
 
 
+async def test_ctrl_q_binding_exists(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        bindings = {b.key for b in pilot.app.BINDINGS}
+        assert "ctrl+q" in bindings
+
+
 async def test_pause_resume_via_ctrl_p(ui_config):
     pipeline_mock = MagicMock()
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
