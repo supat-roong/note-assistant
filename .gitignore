@@ -17,6 +17,8 @@ NoteAssistant.app/
 
 # Project-specific: runtime output
 notes/
+*_output/
+*.log
 
 # Project-specific: machine-generated config
 config.yaml
@@ -29,4 +31,3 @@ CLAUDE.md
 
 # Planning docs
 docs/
-
