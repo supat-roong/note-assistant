@@ -307,6 +307,8 @@ class NoteAssistantUI(App):
     def push_progress(self, current: int, total: int) -> None:
         bar = self.query_one("#file-progress", ProgressBar)
         bar.update(total=total, progress=current)
+        if total > 0 and current >= total:
+            self.set_timer(1.0, self.exit)
 
     def push_transcript(self, text: str) -> None:
         if self._paused: return

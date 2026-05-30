@@ -269,3 +269,12 @@ async def test_push_progress_updates_bar(ui_config):
         await pilot.pause()
         bar = pilot.app.query_one("#file-progress", ProgressBar)
         assert bar.progress == 3
+
+
+async def test_push_progress_exits_at_100(ui_config):
+    exited = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.exit = lambda *a, **kw: exited.append(True)
+        pilot.app.push_progress(10, 10)
+        await pilot.pause(delay=1.5)
+        assert exited
