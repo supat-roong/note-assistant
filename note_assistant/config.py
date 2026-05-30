@@ -36,7 +36,7 @@ class SummarizationConfig(BaseModel):
         "Write each bullet point on its own line starting with '- '.\n\n"
         "{transcript}"
     )
-    mlx_model: str = "mlx-community/Llama-3.2-3B-Instruct-4bit"
+    mlx_model: str = "mlx-community/Qwen3-8B-4bit"
     ollama_model: str = "qwen3:8b"
     ollama_host: str = "http://localhost:11434"
 
