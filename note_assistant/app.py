@@ -178,6 +178,11 @@ class NoteAssistantApp:
                 self._process_chunk(audio_chunk)
                 if self.config.audio.source == "file":
                     self.on_progress(audio_chunk_idx, self._audio.total_chunks)
+            if self.config.audio.source == "file" and self._chunk_count == 0:
+                error_bus.emit("pipeline", "No speech detected in audio file", "warning")
+        except Exception as e:
+            logger.error("Pipeline error: %s", e)
+            error_bus.emit("pipeline", str(e))
         finally:
             self._shutdown()
 

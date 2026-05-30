@@ -108,14 +108,18 @@ def _launch(config: AppConfig) -> None:
         def on_progress(current: int, total: int) -> None:
             ui.call_from_thread(ui.push_progress, current, total)
 
-        pipeline = NoteAssistantApp(
-            updated_config,
-            on_transcript=on_transcript,
-            on_summary=on_summary,
-            on_chunk=on_chunk,
-            on_error=on_error,
-            on_progress=on_progress,
-        )
+        try:
+            pipeline = NoteAssistantApp(
+                updated_config,
+                on_transcript=on_transcript,
+                on_summary=on_summary,
+                on_chunk=on_chunk,
+                on_error=on_error,
+                on_progress=on_progress,
+            )
+        except Exception as e:
+            ui.call_from_thread(ui.push_error, "pipeline", str(e), "error")
+            return
         ui.call_from_thread(ui.set_pipeline, pipeline)
         pipeline_thread = threading.Thread(target=pipeline.run, daemon=True)
         pipeline_thread.start()
