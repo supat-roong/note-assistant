@@ -19,7 +19,7 @@ from .summarizer import BaseSummarizer, create_summarizer
 from .transcriber import BaseTranscriber, create_transcriber
 
 
-def _is_repetitive(text: str, fragment_len: int = 30, max_count: int = 2) -> bool:
+def _is_repetitive(text: str, fragment_len: int = 30, max_count: int = 4) -> bool:
     """Return True if any substring of fragment_len chars appears more than max_count times."""
     if len(text) < fragment_len * (max_count + 1):
         return False
