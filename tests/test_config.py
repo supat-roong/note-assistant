@@ -1,5 +1,5 @@
 from pathlib import Path
-from note_assistant.config import AppConfig, load_config, detect_best_backends
+from note_assistant.config import AppConfig, OutputConfig, load_config, detect_best_backends
 
 
 def test_default_log_level():
@@ -40,12 +40,10 @@ def test_load_config_log_level_override():
 
 
 def test_output_config_auto_title_default():
-    from note_assistant.config import OutputConfig
     assert OutputConfig().auto_title is True
 
 
 def test_output_config_title_prompt_template_has_placeholders():
-    from note_assistant.config import OutputConfig
     rendered = OutputConfig().title_prompt_template.format(language="English", summary="notes")
     assert "English" in rendered
     assert "notes" in rendered
