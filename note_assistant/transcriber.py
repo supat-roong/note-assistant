@@ -138,6 +138,7 @@ class FasterWhisperTranscriber(BaseTranscriber):
         self.config = config
         self._model = None
         self._load_error: str | None = None
+        self._error_emitted = False
         self._ready = threading.Event()
         # Fail fast if the package is missing — before spawning anything.
         try:
@@ -163,7 +164,7 @@ class FasterWhisperTranscriber(BaseTranscriber):
             logger.info("Whisper model ready.")
         except Exception as e:
             self._load_error = str(e)
-            logger.error("Failed to load Whisper model: %s", e)
+            logger.error("Failed to load Whisper model: %s", e, exc_info=True)
         finally:
             self._ready.set()
 
@@ -171,7 +172,11 @@ class FasterWhisperTranscriber(BaseTranscriber):
         if not self._ready.is_set():
             return ""  # model still loading — skip this chunk
         if self._load_error:
-            raise RuntimeError(f"Whisper model failed to load: {self._load_error}")
+            # Surface the error once, then go silent to avoid log spam.
+            if not self._error_emitted:
+                self._error_emitted = True
+                raise RuntimeError(f"Whisper model failed to load: {self._load_error}")
+            return ""
         if self._model is None:
             return ""
         segments, _ = self._model.transcribe(
