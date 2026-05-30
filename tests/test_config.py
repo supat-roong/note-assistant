@@ -37,3 +37,29 @@ def test_detect_best_backends_returns_valid_tuple():
 def test_load_config_log_level_override():
     cfg = load_config(path=None, log_level="DEBUG")
     assert cfg.log_level == "DEBUG"
+
+
+def test_output_config_auto_title_default():
+    from note_assistant.config import OutputConfig
+    assert OutputConfig().auto_title is True
+
+
+def test_output_config_title_prompt_template_has_placeholders():
+    from note_assistant.config import OutputConfig
+    rendered = OutputConfig().title_prompt_template.format(language="English", summary="notes")
+    assert "English" in rendered
+    assert "notes" in rendered
+
+
+def test_load_config_auto_title_false_from_yaml(tmp_path):
+    p = tmp_path / "config.yaml"
+    p.write_text("output:\n  auto_title: false\n")
+    cfg = load_config(path=p)
+    assert cfg.output.auto_title is False
+
+
+def test_load_config_custom_title_prompt_from_yaml(tmp_path):
+    p = tmp_path / "config.yaml"
+    p.write_text('output:\n  title_prompt_template: "Custom {language} {summary}"\n')
+    cfg = load_config(path=p)
+    assert cfg.output.title_prompt_template == "Custom {language} {summary}"

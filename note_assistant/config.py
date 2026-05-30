@@ -49,6 +49,13 @@ class OutputConfig(BaseModel):
     output_dir: Path = Path("./notes")
     apple_notes: bool = True
     apple_notes_title: str = "Note Assistant — {date}"
+    auto_title: bool = True
+    title_prompt_template: str = (
+        "Generate a concise, informative title of 5 words or less for these notes. "
+        "Write the title in {language}. "
+        "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
+        "{summary}"
+    )
 
 
 class AppConfig(BaseModel):
