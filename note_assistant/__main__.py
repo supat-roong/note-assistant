@@ -116,7 +116,10 @@ def _launch(config: AppConfig) -> None:
         pipeline_thread = threading.Thread(target=pipeline.run, daemon=True)
         pipeline_thread.start()
 
-    ui = NoteAssistantUI(config, on_start_pipeline=start_pipeline)
+    def start_pipeline_async(updated_config: AppConfig) -> None:
+        threading.Thread(target=start_pipeline, args=(updated_config,), daemon=True).start()
+
+    ui = NoteAssistantUI(config, on_start_pipeline=start_pipeline_async)
 
     try:
         ui.run()
