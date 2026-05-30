@@ -1,0 +1,56 @@
+# Note Assistant — Example Configuration
+# Copy this file to config.yaml and adjust to your setup.
+
+# Language settings (used in prompts and Apple Notes title)
+language_input: English   # spoken language of the audio
+language_output: English  # language for summaries and titles
+
+# Logging
+log_level: WARNING        # DEBUG | INFO | WARNING | ERROR | CRITICAL
+
+audio:
+  source: mic           # mic | system | file
+  file_path: null       # path to audio file when source is "file"
+  sample_rate: 16000
+  chunk_seconds: 5.0
+
+transcription:
+  backend: apple        # apple | faster-whisper | mlx-whisper
+                        # apple:         macOS 13+ built-in Speech framework (recommended on Mac)
+                        # faster-whisper: CPU/CUDA Whisper, works on all platforms
+                        # mlx-whisper:   Apple Silicon only, runs via MLX
+  language: null        # null = auto-detect; set to e.g. "en", "ja" to force a language
+  whisper_model: base   # faster-whisper model size: tiny | base | small | medium | large-v3
+  mlx_whisper_model: mlx-community/whisper-base-mlx  # mlx-whisper model (HuggingFace repo)
+  device: auto          # auto | cpu | mps | cuda
+
+summarization:
+  backend: apple        # apple | mlx | ollama
+                        # apple: Apple Foundation Models (macOS 26+ / Apple Silicon)
+                        # mlx:   local LLM via MLX (Apple Silicon)
+                        # ollama: local LLM via Ollama server
+  summarize_every: 3    # generate a summary every N transcript chunks
+  prompt_template: |
+    Summarize the following transcript into concise bullet-point notes.
+    Write each bullet point on its own line starting with '- '.
+
+    {transcript}
+  mlx_model: mlx-community/Qwen3-8B-4bit
+  mlx_fallback_model: mlx-community/gemma-4-e4b-it-4bit
+  ollama_model: qwen3:8b
+  ollama_fallback_model: gemma4:e4b
+  ollama_host: http://localhost:11434
+
+output:
+  save_transcript: true
+  save_summary: true
+  output_dir: ./notes
+  apple_notes: true             # save to Apple Notes (macOS only)
+  apple_notes_title: "Note Assistant — {date}"  # {date} is replaced at runtime
+  auto_title: true              # generate a short title from the summary via LLM
+  title_prompt_template: |
+    Generate a concise, informative title of 5 words or less for these notes.
+    Write the title in {language}.
+    Reply with ONLY the title — no quotes, no punctuation at the end:
+
+    {summary}
