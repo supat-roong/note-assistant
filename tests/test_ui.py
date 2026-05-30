@@ -101,15 +101,15 @@ async def test_push_error_calls_notify(ui_config):
 
 async def test_file_path_input_hidden_by_default(ui_config):
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
-        file_input = pilot.app.query_one("#file-path")
-        assert not file_input.display
+        row = pilot.app.query_one("#file-path-row")
+        assert not row.display
 
 
 async def test_file_path_input_visible_for_file_source(ui_config):
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
         pilot.app._update_file_input_visibility("file")
         await pilot.pause()
-        assert pilot.app.query_one("#file-path").display
+        assert pilot.app.query_one("#file-path-row").display
 
 
 async def test_stop_button_present_in_recording_view(ui_config):

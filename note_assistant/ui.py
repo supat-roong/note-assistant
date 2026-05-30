@@ -78,9 +78,13 @@ class NoteAssistantUI(App):
         margin-bottom: 1;
         text-style: italic;
     }
-    #file-path {
+    #file-path-row {
         margin-top: 1;
         display: none;
+        height: auto;
+    }
+    #file-path-row Input {
+        width: 1fr;
     }
     #lang-row {
         height: auto;
@@ -152,11 +156,13 @@ class NoteAssistantUI(App):
                     value=self._config.audio.source,
                     id="audio-source"
                 )
-                yield Input(
-                    placeholder="Enter absolute path to audio file...",
-                    id="file-path",
-                    value=str(self._config.audio.file_path or "")
-                )
+                with Horizontal(id="file-path-row"):
+                    yield Input(
+                        placeholder="Enter absolute path to audio file...",
+                        id="file-path",
+                        value=str(self._config.audio.file_path or "")
+                    )
+                    yield Button("Browse...", id="browse-btn")
             
             with Horizontal(id="lang-row"):
                 with Vertical():
@@ -244,8 +250,8 @@ class NoteAssistantUI(App):
             self._update_file_input_visibility(event.value)
 
     def _update_file_input_visibility(self, source: str) -> None:
-        field = self.query_one("#file-path", Input)
-        field.display = (source == "file")
+        row = self.query_one("#file-path-row")
+        row.display = (source == "file")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "stop-btn":
