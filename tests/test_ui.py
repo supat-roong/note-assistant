@@ -186,13 +186,13 @@ async def test_ctrl_q_binding_exists(ui_config):
 
 async def test_settings_all_sections_visible(ui_config):
     """Regression: all setting groups must have non-zero height (CSS layout fix)."""
-    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 90)) as pilot:
         for widget in pilot.app.query(".setting-group"):
             assert widget.region.height > 4, (
                 f"setting-group too small: h={widget.region.height} — CSS height:auto regression"
             )
         start = pilot.app.query_one("#start-btn")
-        assert start.region.y < 70, f"start-btn off-screen at y={start.region.y}"
+        assert start.region.y < 90, f"start-btn off-screen at y={start.region.y}"
 
 
 async def test_pause_resume_via_ctrl_p(ui_config):
@@ -278,3 +278,35 @@ async def test_push_progress_exits_at_100(ui_config):
         pilot.app.push_progress(10, 10)
         await pilot.pause(delay=1.5)
         assert exited
+
+
+async def test_auto_title_switch_renders_with_default_on(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 80)) as pilot:
+        from textual.widgets import Switch
+        switch = pilot.app.query_one("#auto-title", Switch)
+        assert switch.value is True
+
+
+async def test_start_button_reads_auto_title_switch_off(ui_config):
+    from textual.widgets import Switch
+    received = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=received.append).run_test(size=(120, 80)) as pilot:
+        pilot.app.query_one("#auto-title", Switch).value = False
+        await pilot.pause()
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert len(received) == 1
+        assert received[0].output.auto_title is False
+
+
+async def test_start_button_reads_auto_title_switch_on(ui_config):
+    from textual.widgets import Switch
+    received = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=received.append).run_test(size=(120, 80)) as pilot:
+        pilot.app.query_one("#auto-title", Switch).value = True
+        await pilot.pause()
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert received[0].output.auto_title is True

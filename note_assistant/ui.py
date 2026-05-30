@@ -10,7 +10,7 @@ from typing import Callable, Optional
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Header, Footer, Label, Button, ProgressBar, RichLog, Select, Static, Input
+from textual.widgets import Header, Footer, Label, Button, ProgressBar, RichLog, Select, Static, Input, Switch
 from textual.worker import WorkerState
 
 from .config import AppConfig
@@ -104,6 +104,13 @@ class NoteAssistantUI(App):
         height: auto;
         width: 1fr;
         padding: 0 1;
+    }
+    #auto-title-row {
+        height: auto;
+    }
+    #auto-title-row Label {
+        width: 1fr;
+        content-align: left middle;
     }
     #stop-row {
         height: auto;
@@ -205,7 +212,13 @@ class NoteAssistantUI(App):
                             id="s-backend",
                         )
                 yield Label("", id="summarization-status", classes="status-label")
-            
+
+            with Vertical(classes="setting-group"):
+                yield Label("Output")
+                with Horizontal(id="auto-title-row"):
+                    yield Label("Auto-generate note title")
+                    yield Switch(value=self._config.output.auto_title, id="auto-title")
+
             yield Button("🚀 Start Processing", variant="success", id="start-btn")
 
         # Recording View
@@ -306,7 +319,8 @@ class NoteAssistantUI(App):
             else:
                 self._config.transcription.backend = self.query_one("#t-backend", Select).value
             self._config.summarization.backend = self.query_one("#s-backend", Select).value
-            
+            self._config.output.auto_title = self.query_one("#auto-title", Switch).value
+
             self.query_one("#settings-view").display = False
             self.query_one("#recording-view").display = True
             self.query_one("#file-progress").display = (self._config.audio.source == "file")
