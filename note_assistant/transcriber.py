@@ -241,6 +241,11 @@ class MLXWhisperTranscriber(BaseTranscriber):
             return ""
         if self._mlx_whisper is None:
             return ""
+        # Skip silent chunks — same gate as AppleSpeechTranscriber.
+        # Without this, Whisper hallucinates on padded silence (repetitions,
+        # memorised training phrases like "rebels rebels rebels…").
+        if float(np.sqrt(np.mean(audio ** 2))) < 1e-4:
+            return ""
         kwargs: dict = {}
         if self.config.language:
             kwargs["language"] = self.config.language
@@ -248,6 +253,8 @@ class MLXWhisperTranscriber(BaseTranscriber):
             audio,
             path_or_hf_repo=self.config.mlx_whisper_model,
             verbose=None,  # None = no stdout — False still prints "Detected language" etc.
+            temperature=0.0,  # greedy decoding — less hallucination than sampling
+            condition_on_previous_text=False,  # independent chunks; avoids repetition loops
             **kwargs,
         )
         return result.get("text", "").strip()
