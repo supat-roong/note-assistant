@@ -7,8 +7,9 @@ from note_assistant.notes_writer import NotesWriter
 def writer(monkeypatch):
     """NotesWriter with osascript patched out."""
     calls = []
-    monkeypatch.setattr(NotesWriter, "_run_osascript", lambda self, s: calls.append(s))
+    monkeypatch.setattr(NotesWriter, "_run_osascript", lambda self, s: calls.append(s) or "")
     nw = NotesWriter("Test — {date}")
+    nw._note_id = "fake-id"
     nw._note_created = True
     nw._last_flush = 0.0  # throttle expired
     return nw, calls
@@ -54,16 +55,16 @@ def test_close_session_forces_flush_despite_throttle(writer):
     nw._last_flush = time.monotonic()  # throttled
     nw.close_session()
     assert len(calls) == 1
-    assert "_Session ended._" in calls[0]
+    assert "Session ended" in calls[0]
 
 
 def test_escape_double_quotes():
-    assert NotesWriter._escape('say "hi"') == 'say \\"hi\\"'
+    assert NotesWriter._as('say "hi"') == 'say \\"hi\\"'
 
 
 def test_escape_newline():
-    assert NotesWriter._escape("line\nbreak") == "line\\nbreak"
+    assert NotesWriter._as("line\nbreak") == "line\\nbreak"
 
 
 def test_escape_backslash():
-    assert NotesWriter._escape("a\\b") == "a\\\\b"
+    assert NotesWriter._as("a\\b") == "a\\\\b"
