@@ -25,7 +25,7 @@ def main(
     source: Annotated[Optional[str], typer.Option("--source", "-s",
         help="Audio source: mic | system")] = None,
     transcription_backend: Annotated[Optional[str], typer.Option("--transcription",
-        help="Transcription backend: apple | faster-whisper")] = None,
+        help="Transcription backend: apple | faster-whisper | mlx-whisper")] = None,
     whisper_model: Annotated[Optional[str], typer.Option("--whisper-model",
         help="faster-whisper model: tiny|base|small|medium|large-v3")] = None,
     summarization_backend: Annotated[Optional[str], typer.Option("--summarization",
@@ -127,6 +127,13 @@ def _launch(config: AppConfig) -> None:
                 ui.push_error,
                 "pipeline",
                 f"Loading Whisper '{updated_config.transcription.whisper_model}' model — transcription will start once ready…",
+                "warning",
+            )
+        elif updated_config.transcription.backend == "mlx-whisper":
+            ui.call_from_thread(
+                ui.push_error,
+                "pipeline",
+                f"Loading MLX Whisper '{updated_config.transcription.mlx_whisper_model}' model — transcription will start once ready…",
                 "warning",
             )
         try:

@@ -203,7 +203,6 @@ class MLXWhisperTranscriber(BaseTranscriber):
     def __init__(self, config: TranscriptionConfig):
         self.config = config
         self._mlx_whisper = None
-        self._model_path: str | None = None
         self._load_error: str | None = None
         self._error_emitted = False
         self._ready = threading.Event()
@@ -218,9 +217,7 @@ class MLXWhisperTranscriber(BaseTranscriber):
     def _load(self) -> None:
         try:
             import mlx_whisper
-            from huggingface_hub import snapshot_download
-            logger.info("Downloading/caching MLX Whisper model '%s'…", self.config.mlx_whisper_model)
-            self._model_path = snapshot_download(repo_id=self.config.mlx_whisper_model)
+            logger.info("Loading MLX Whisper model '%s'…", self.config.mlx_whisper_model)
             self._mlx_whisper = mlx_whisper
             logger.info("MLX Whisper model ready.")
         except Exception as e:
@@ -244,7 +241,7 @@ class MLXWhisperTranscriber(BaseTranscriber):
             kwargs["language"] = self.config.language
         result = self._mlx_whisper.transcribe(
             audio,
-            path_or_hf_repo=self._model_path,
+            path_or_hf_repo=self.config.mlx_whisper_model,
             verbose=False,
             **kwargs,
         )
