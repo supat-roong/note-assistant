@@ -20,6 +20,10 @@ class BaseSummarizer(ABC):
         return
         yield  # pragma: no cover — marks this as an async generator
 
+    async def generate_title(self, summary: str) -> str:
+        """Generate a short title (≤5 words) from the summary. Override in subclasses."""
+        return ""
+
 
 # ---------------------------------------------------------------------------
 # Apple Foundation Models backend
@@ -84,6 +88,21 @@ class AppleFoundationSummarizer(BaseSummarizer):
                 yield chunk
         except fm.AssetsUnavailableError as e:
             raise RuntimeError(f"Apple Intelligence assets unavailable: {e}") from e
+
+    async def generate_title(self, summary: str) -> str:
+        prompt = (
+            "Generate a concise, informative title of 5 words or less for these notes. "
+            "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
+            + summary[:1000]
+        )
+        session = self._fm.LanguageModelSession()
+        result = ""
+        try:
+            async for chunk in session.stream_response(prompt):
+                result = chunk
+        except Exception:
+            pass
+        return result.strip().strip('"').strip("'").rstrip(".")
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +194,19 @@ class OllamaSummarizer(BaseSummarizer):
             token = chunk["message"]["content"]
             if token:
                 yield token
+
+    async def generate_title(self, summary: str) -> str:
+        prompt = (
+            "Generate a concise, informative title of 5 words or less for these notes. "
+            "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
+            + summary[:1000]
+        )
+        response = await self._ollama.chat(
+            model=self.config.ollama_model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=False,
+        )
+        return response["message"]["content"].strip().strip('"').strip("'").rstrip(".")
 
 
 # ---------------------------------------------------------------------------

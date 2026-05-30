@@ -14,9 +14,8 @@ class NotesWriter:
     """
 
     def __init__(self, title_template: str = "Note Assistant — {date}"):
-        self._title = title_template.format(
-            date=datetime.now().strftime("%Y-%m-%d %H:%M")
-        )
+        self._date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self._title = title_template.format(date=self._date_str)
         self._last_flush = 0.0
         self._throttle_secs = 1.0
         self._note_id: str = ""
@@ -36,6 +35,11 @@ class NotesWriter:
     def update_summary(self, summary: str) -> None:
         self._summary = summary
         self._maybe_flush()
+
+    def set_title(self, new_title: str) -> None:
+        """Rename the note with an informative title generated after processing."""
+        self._title = new_title
+        self._flush(force=True)
 
     def close_session(self) -> None:
         self._closed = True

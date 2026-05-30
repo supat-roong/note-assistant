@@ -247,6 +247,15 @@ class NoteAssistantApp:
         self._transcriber.close()
         error_bus.unsubscribe(self._route_error)
 
+        if self._notes and self._full_summary:
+            try:
+                title = asyncio.run(self._summarizer.generate_title(self._full_summary))
+                if title:
+                    new_name = f"{title} — {self._notes._date_str} #Note Assistant"
+                    self._notes.set_title(new_name)
+            except Exception as e:
+                logger.warning("Could not generate note title: %s", e)
+
         if self._notes:
             self._notes.close_session()
 
