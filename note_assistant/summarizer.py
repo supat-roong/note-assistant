@@ -44,6 +44,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
     def _check_availability(self) -> None:
         try:
             import apple_fm_sdk as fm
+            self._fm = fm
         except ImportError as e:
             raise RuntimeError(
                 "apple-fm-sdk not installed. Run: uv add apple-fm-sdk"
@@ -54,7 +55,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
             raise RuntimeError(f"Apple Foundation Models not available: {reason}")
 
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
-        import apple_fm_sdk as fm
+        fm = self._fm
         prompt = self.config.prompt_template.format(transcript=transcript)
         if self.language_input != self.language_output:
             prompt += (
