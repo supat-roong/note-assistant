@@ -50,3 +50,14 @@ def test_create_apple_transcriber_on_darwin():
     cfg = TranscriptionConfig(backend="apple")
     from note_assistant.transcriber import AppleSpeechTranscriber
     assert _REGISTRY["apple"] is AppleSpeechTranscriber
+
+
+def test_transcription_config_has_mlx_whisper_model_field():
+    cfg = TranscriptionConfig(backend="mlx-whisper", mlx_whisper_model="mlx-community/whisper-base-mlx")
+    assert cfg.mlx_whisper_model == "mlx-community/whisper-base-mlx"
+    assert cfg.backend == "mlx-whisper"
+
+
+def test_transcription_config_mlx_whisper_model_default():
+    cfg = TranscriptionConfig()
+    assert cfg.mlx_whisper_model == "mlx-community/whisper-base-mlx"

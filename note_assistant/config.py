@@ -22,9 +22,10 @@ class AudioConfig(BaseModel):
 
 
 class TranscriptionConfig(BaseModel):
-    backend: Literal["apple", "faster-whisper"] = "apple"
+    backend: Literal["apple", "faster-whisper", "mlx-whisper"] = "apple"
     language: Optional[str] = None
     whisper_model: str = "base"
+    mlx_whisper_model: str = "mlx-community/whisper-base-mlx"
     device: Literal["auto", "cpu", "mps", "cuda"] = "auto"
 
 
