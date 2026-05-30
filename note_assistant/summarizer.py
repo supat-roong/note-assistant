@@ -1,6 +1,8 @@
 """Summarization backend — Apple Foundation Models, MLX (on-device), or Ollama."""
 from __future__ import annotations
 
+import json
+import pathlib
 import platform
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator
@@ -8,23 +10,40 @@ from typing import Any, AsyncGenerator
 from .config import SummarizationConfig
 from note_assistant import logger
 
-# Known context window sizes (tokens) for specific models
-_CONTEXT_LENGTHS: dict[str, int] = {
-    "mlx-community/Qwen3-8B-4bit": 40_960,
-    "mlx-community/Qwen3-14B-4bit": 131_072,
-    "mlx-community/gemma-3-12b-it-4bit": 131_072,
-    "mlx-community/gemma-3-12b-it-qat-4bit": 131_072,
-    "mlx-community/gemma-4-e4b-it-4bit": 131_072,
-    "gemma4:e4b": 131_072,
-    "mlx-community/Qwen2.5-14B-Instruct-1M-4bit": 1_000_000,
-    "mlx-community/Llama-3.2-3B-Instruct-4bit": 131_072,
-    "qwen3:8b": 40_960,
-    "qwen3:14b": 131_072,
-    "gemma3:12b": 131_072,
-    "gemma4:e4b": 131_072,
-    "llama3.2:3b": 131_072,
-    "llama3.1:8b": 131_072,
-}
+
+def _mlx_context_length(model_name: str) -> int | None:
+    """Read max_position_embeddings from the model's cached config.json."""
+    slug = model_name.replace("/", "--").replace(":", "-")
+    base = pathlib.Path.home() / ".cache/huggingface/hub"
+    configs = sorted(base.glob(f"models--{slug}/snapshots/*/config.json"))
+    if not configs:
+        return None
+    try:
+        data = json.loads(configs[-1].read_text())
+        return data.get("max_position_embeddings") or data.get("max_context_length")
+    except Exception:
+        return None
+
+
+def _ollama_context_length(model_name: str, host: str = "http://localhost:11434") -> int | None:
+    """Query Ollama's /api/show endpoint for the model's context length."""
+    try:
+        import urllib.request, json as _json
+        req = urllib.request.Request(
+            f"{host}/api/show",
+            data=_json.dumps({"name": model_name}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            info = _json.loads(resp.read())
+        mi = info.get("modelinfo", {})
+        for key, val in mi.items():
+            if "context" in key.lower() or "ctx_length" in key.lower():
+                return int(val)
+    except Exception:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +168,8 @@ class MLXSummarizer(BaseSummarizer):
         self.language_input = language_input
         self.language_output = language_output
         self._model_name = model_override or getattr(config, "mlx_model", self.DEFAULT_MODEL)
-        self.TOKEN_LIMIT = _CONTEXT_LENGTHS.get(self._model_name, 40_960)
+        self.TOKEN_LIMIT = _mlx_context_length(self._model_name) or 40_960
+        logger.debug("MLX %s context length: %d", self._model_name, self.TOKEN_LIMIT)
         self._model = None
         self._tokenizer = None
         # Validate mlx-lm is installed at init time (fail fast)
@@ -202,7 +222,8 @@ class OllamaSummarizer(BaseSummarizer):
         self.language_input = language_input
         self.language_output = language_output
         self._model_name = model_override or config.ollama_model
-        self.TOKEN_LIMIT = _CONTEXT_LENGTHS.get(self._model_name, 40_960)
+        self.TOKEN_LIMIT = _ollama_context_length(self._model_name, config.ollama_host) or 40_960
+        logger.debug("Ollama %s context length: %d", self._model_name, self.TOKEN_LIMIT)
         self._ollama: Any = None
         self._load()
 
