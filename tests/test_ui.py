@@ -160,6 +160,17 @@ async def test_ctrl_q_binding_exists(ui_config):
         assert "ctrl+q" in bindings
 
 
+async def test_settings_all_sections_visible(ui_config):
+    """Regression: all setting groups must have non-zero height (CSS layout fix)."""
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        for widget in pilot.app.query(".setting-group"):
+            assert widget.region.height > 4, (
+                f"setting-group too small: h={widget.region.height} — CSS height:auto regression"
+            )
+        start = pilot.app.query_one("#start-btn")
+        assert start.region.y < 70, f"start-btn off-screen at y={start.region.y}"
+
+
 async def test_pause_resume_via_ctrl_p(ui_config):
     pipeline_mock = MagicMock()
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
