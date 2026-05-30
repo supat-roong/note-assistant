@@ -10,7 +10,7 @@ from typing import Callable, Optional
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Header, Footer, Label, Button, RichLog, Select, Static, Input
+from textual.widgets import Header, Footer, Label, Button, ProgressBar, RichLog, Select, Static, Input
 from textual.worker import WorkerState
 
 from .config import AppConfig
@@ -108,6 +108,11 @@ class NoteAssistantUI(App):
     #stop-row {
         height: auto;
         padding: 0 1;
+    }
+    #file-progress {
+        display: none;
+        margin: 0 1 1 1;
+        height: auto;
     }
     #elapsed-label {
         margin-left: 2;
@@ -208,6 +213,7 @@ class NoteAssistantUI(App):
             with Horizontal(id="stop-row"):
                 yield Button("⏹ Stop", variant="error", id="stop-btn")
                 yield Label("00:00", id="elapsed-label")
+            yield ProgressBar(id="file-progress", total=100, show_eta=False)
             with Horizontal(id="panels-row"):
                 with ScrollableContainer(id="transcript-panel"):
                     yield Label("📝 Transcript")
@@ -280,6 +286,7 @@ class NoteAssistantUI(App):
             
             self.query_one("#settings-view").display = False
             self.query_one("#recording-view").display = True
+            self.query_one("#file-progress").display = (self._config.audio.source == "file")
             self._update_status_bar()
             self._start_pipeline(self._config)
 
@@ -296,6 +303,10 @@ class NoteAssistantUI(App):
     def on_audio_chunk(self) -> None:
         self._last_chunk_at = datetime.now()
         self._update_status_bar()
+
+    def push_progress(self, current: int, total: int) -> None:
+        bar = self.query_one("#file-progress", ProgressBar)
+        bar.update(total=total, progress=current)
 
     def push_transcript(self, text: str) -> None:
         if self._paused: return

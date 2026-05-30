@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from unittest.mock import MagicMock, PropertyMock, patch
-from textual.widgets import Button, Input, Label
+from textual.widgets import Button, Input, Label, ProgressBar
 from note_assistant.ui import NoteAssistantUI, StatusBar, _run_file_picker
 from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
 
@@ -246,3 +246,26 @@ async def test_browse_button_notifies_on_osascript_error(ui_config):
         pilot.app.on_worker_state_changed(mock_event)
         await pilot.pause()
         assert any("picker" in n.lower() or "unavailable" in n.lower() for n in notified)
+
+
+async def test_file_progress_bar_hidden_by_default(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        assert not pilot.app.query_one("#file-progress").display
+
+
+async def test_file_progress_bar_shown_for_file_source(ui_config):
+    ui_config.audio.source = "file"
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.query_one("#file-path", Input).value = "/dev/null"
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert pilot.app.query_one("#file-progress").display
+
+
+async def test_push_progress_updates_bar(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.push_progress(3, 10)
+        await pilot.pause()
+        bar = pilot.app.query_one("#file-progress", ProgressBar)
+        assert bar.progress == 3

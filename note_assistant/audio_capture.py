@@ -44,6 +44,11 @@ class AudioSource:
         self._q: queue.Queue[np.ndarray] = queue.Queue()
         self._stop_event = threading.Event()
         self._stream: sd.InputStream | None = None
+        self._total_chunks: int = 0
+
+    @property
+    def total_chunks(self) -> int:
+        return self._total_chunks
 
     def _resolve_device(self) -> int | None:
         if self.config.source == "mic":
@@ -79,7 +84,8 @@ class AudioSource:
         # Note: sr=self.sample_rate ensures it matches what the transcribers expect
         logger.debug("Loading audio file: %s", self.config.file_path)
         y, _ = librosa.load(str(self.config.file_path), sr=self.sample_rate)
-        
+        self._total_chunks = max(1, -(-len(y) // self.chunk_frames))  # ceiling division
+
         for i in range(0, len(y), self.chunk_frames):
             if self._stop_event.is_set():
                 break

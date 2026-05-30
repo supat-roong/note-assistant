@@ -88,6 +88,7 @@ class NoteAssistantApp:
         on_summary: Callable[[str], None] | None = None,
         on_chunk: Callable[[], None] | None = None,
         on_error: Callable[[str, str, str], None] | None = None,
+        on_progress: Callable[[int, int], None] | None = None,
         transcriber: "BaseTranscriber | None" = None,
         summarizer: "BaseSummarizer | None" = None,
     ):
@@ -96,6 +97,7 @@ class NoteAssistantApp:
         self.on_summary = on_summary or (lambda x: None)
         self.on_chunk = on_chunk or (lambda: None)
         self.on_error = on_error or (lambda s, m, sev: None)
+        self.on_progress = on_progress or (lambda cur, tot: None)
 
         self._transcriber = transcriber or create_transcriber(config.transcription)
         self._summarizer = summarizer or create_summarizer(
@@ -167,11 +169,15 @@ class NoteAssistantApp:
             self._notes.open_session()
 
         try:
+            audio_chunk_idx = 0
             for audio_chunk in self._audio.stream():
                 if not self._running:
                     break
+                audio_chunk_idx += 1
                 self.on_chunk()
                 self._process_chunk(audio_chunk)
+                if self.config.audio.source == "file":
+                    self.on_progress(audio_chunk_idx, self._audio.total_chunks)
         finally:
             self._shutdown()
 
