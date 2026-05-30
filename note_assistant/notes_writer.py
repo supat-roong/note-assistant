@@ -67,8 +67,7 @@ class NotesWriter:
         ]
         if self._summary:
             parts.append("<div><b>Summary</b></div>")
-            for line in self._summary.splitlines():
-                parts.append(f"<div>{self._he(line) or '<br>'}</div>")
+            parts.append(self._summary_to_html(self._summary))
             parts.append("<div><br></div>")
         parts.append("<div><b>Transcript</b></div>")
         for line in self._transcript_lines:
@@ -98,6 +97,32 @@ class NotesWriter:
             return result.stdout.strip()
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
+
+    def _summary_to_html(self, text: str) -> str:
+        """Convert summary text to HTML, rendering bullet lines as <ul><li> items."""
+        lines = text.splitlines()
+        parts: list[str] = []
+        in_list = False
+        for line in lines:
+            stripped = line.strip()
+            is_bullet = stripped.startswith(("- ", "• ", "* "))
+            if is_bullet:
+                if not in_list:
+                    parts.append("<ul>")
+                    in_list = True
+                content = stripped[2:].strip()
+                parts.append(f"<li>{self._he(content)}</li>")
+            else:
+                if in_list:
+                    parts.append("</ul>")
+                    in_list = False
+                if stripped:
+                    parts.append(f"<div>{self._he(stripped)}</div>")
+                else:
+                    parts.append("<div><br></div>")
+        if in_list:
+            parts.append("</ul>")
+        return "".join(parts)
 
     @staticmethod
     def _he(text: str) -> str:
