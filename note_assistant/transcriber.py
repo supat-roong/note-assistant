@@ -31,26 +31,44 @@ class BaseTranscriber(ABC):
 # ---------------------------------------------------------------------------
 
 class AppleSpeechTranscriber(BaseTranscriber):
-    """Uses Apple's Speech.framework via pyobjc for on-device transcription."""
+    """Uses Apple's Speech.framework via a subprocess worker.
+
+    SFSpeechRecognizer callbacks cannot be delivered to daemon threads when
+    asyncio occupies the main thread (asyncio's kqueue blocks CFRunLoop dispatch).
+    Running recognition in a dedicated subprocess — which has no asyncio — avoids
+    this entirely.  The persistent subprocess is started once and reused for all
+    chunks, amortising startup cost.
+    """
 
     def __init__(self, config: TranscriptionConfig):
         self.config = config
         self._lock = threading.Lock()
+        self._proc: "subprocess.Popen | None" = None
         self._load()
 
     def _load(self) -> None:
+        import subprocess
+        import sys
+
         try:
             import Speech  # pyobjc-framework-Speech
-            self._Speech = Speech
-            self._check_permission()
+            self._check_permission(Speech)
         except ImportError as e:
             raise RuntimeError(
                 "pyobjc-framework-Speech not installed. "
                 "Run: uv pip install pyobjc-framework-Speech"
             ) from e
 
-    def _check_permission(self) -> None:
-        status = self._Speech.SFSpeechRecognizer.authorizationStatus()
+        self._proc = subprocess.Popen(
+            [sys.executable, "-m", "note_assistant._speech_worker"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+
+    @staticmethod
+    def _check_permission(Speech) -> None:  # noqa: N803
+        status = Speech.SFSpeechRecognizer.authorizationStatus()
         if status == 3:  # Authorized
             return
         if status == 1:  # Denied
@@ -60,85 +78,48 @@ class AppleSpeechTranscriber(BaseTranscriber):
             )
         if status == 2:  # Restricted
             raise RuntimeError("Speech Recognition is restricted on this device.")
-        # NotDetermined — fire the system dialog, then fail fast so the user
-        # sees instructions immediately.  On restart the status will be Authorized.
-        self._Speech.SFSpeechRecognizer.requestAuthorization_(lambda _: None)
+        # NotDetermined — trigger dialog, then fail fast with instructions.
+        Speech.SFSpeechRecognizer.requestAuthorization_(lambda _: None)
         raise RuntimeError(
             "Speech Recognition permission requested. "
             "Click Allow in the system dialog, then restart Note Assistant."
         )
 
     def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
-        """Transcribe audio array using Apple Speech framework."""
-        import AVFoundation
-        import Foundation
-        import Speech
+        import struct
 
-        # Log audio level for debugging
-        rms = np.float64(np.sqrt(np.mean(audio**2)))
+        if self._proc is None or self._proc.poll() is not None:
+            logger.error("Speech worker process is not running")
+            return ""
+
+        rms = float(np.sqrt(np.mean(audio ** 2)))
         logger.debug("Transcribing chunk: samples=%d, RMS=%.6f", len(audio), rms)
-
         if rms < 1e-4:
-            # Silence threshold
             return ""
 
-        # Convert numpy float32 → AVAudioPCMBuffer
-        fmt = AVFoundation.AVAudioFormat.alloc().initWithCommonFormat_sampleRate_channels_interleaved_(
-            AVFoundation.AVAudioPCMFormatFloat32, sample_rate, 1, True
-        )
-        capacity = len(audio)
-        buf = AVFoundation.AVAudioPCMBuffer.alloc().initWithPCMFormat_frameCapacity_(fmt, capacity)
-        buf.setFrameLength_(capacity)
-
-        # Copy numpy data into the buffer's float channel data.
-        # objc.varlist (returned by floatChannelData) is not accepted by ctypes.memmove;
-        # use as_buffer() + memoryview byte copy instead.
-        src_bytes = audio.tobytes()
-        channel_data = buf.floatChannelData()[0]
-        memoryview(channel_data.as_buffer(len(src_bytes))).cast("B")[:len(src_bytes)] = memoryview(src_bytes).cast("B")
-
-        recognizer = Speech.SFSpeechRecognizer.alloc().initWithLocale_(
-            Foundation.NSLocale.currentLocale()
-        )
-        if not recognizer:
+        audio_bytes = audio.astype(np.float32).tobytes()
+        header = struct.pack(">II", len(audio_bytes), sample_rate)
+        try:
+            with self._lock:
+                self._proc.stdin.write(header + audio_bytes)
+                self._proc.stdin.flush()
+                raw_len = self._proc.stdout.read(4)
+                if len(raw_len) < 4:
+                    return ""
+                text_len = struct.unpack(">I", raw_len)[0]
+                return self._proc.stdout.read(text_len).decode("utf-8")
+        except Exception as e:
+            logger.error("Speech worker IPC error: %s", e)
             return ""
 
-        recognizer.setSupportsOnDeviceRecognition_(True)
-        if not recognizer.isAvailable():
-            logger.error("SFSpeechRecognizer not available — check System Settings")
-            return ""
-
-        request = Speech.SFSpeechAudioBufferRecognitionRequest.alloc().init()
-        if not request:
-            return ""
-        
-        request.appendAudioPCMBuffer_(buf)
-        request.endAudio()
-
-        result_text = ""
-        done = threading.Event()
-
-        def handler(result, error):  # noqa: ANN001
-            nonlocal result_text
-            if error:
-                logger.error("Recognition error: %s", error.localizedDescription())
-            if result:
-                result_text = result.bestTranscription().formattedString()
-            if result and result.isFinal():
-                done.set()
-            elif not result:
-                done.set()
-
-        task = recognizer.recognitionTaskWithRequest_resultHandler_(request, handler)
-        # Pump the RunLoop so Speech framework callbacks can fire on this thread.
-        # done.wait() alone doesn't work because Speech callbacks require an active RunLoop.
-        import time
-        from CoreFoundation import CFRunLoopRunInMode, kCFRunLoopDefaultMode
-        deadline = time.monotonic() + 5.0
-        while not done.is_set() and time.monotonic() < deadline:
-            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, True)
-        if not done.is_set():
-            logger.debug("Recognition timed out for chunk")
+    def close(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            try:
+                self._proc.stdin.close()
+            except Exception:
+                pass
+            self._proc.terminate()
+        self._proc = None
 
         return result_text.strip()
 

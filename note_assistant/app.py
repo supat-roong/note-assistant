@@ -233,6 +233,7 @@ class NoteAssistantApp:
     def _shutdown(self) -> None:
         self._worker.stop()
         self._worker.join(timeout=5)
+        self._transcriber.close()
         error_bus.unsubscribe(self._route_error)
 
         if self._notes:
