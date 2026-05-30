@@ -322,7 +322,7 @@ class NoteAssistantUI(App):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "stop-btn":
-            self.exit()
+            self._show_done_view()
         elif event.button.id == "browse-btn":
             self.run_worker(_run_file_picker, thread=True, name="browse-file")
         elif event.button.id == "start-btn":
@@ -372,7 +372,7 @@ class NoteAssistantUI(App):
         bar = self.query_one("#file-progress", ProgressBar)
         bar.update(total=total, progress=current)
         if total > 0 and current >= total:
-            self.set_timer(1.0, self.exit)
+            self.set_timer(1.0, self._show_done_view)
 
     def push_transcript(self, text: str) -> None:
         if self._paused: return
@@ -397,6 +397,12 @@ class NoteAssistantUI(App):
             self._pipeline.pause()
         self._paused = not self._paused
         self._update_status_bar()
+
+    def _show_done_view(self) -> None:
+        if self._pipeline is not None:
+            self._pipeline.stop()
+        self.query_one("#recording-view").display = False
+        self.query_one("#done-view").display = True
 
     def _update_status_bar(self) -> None:
         is_capturing = False

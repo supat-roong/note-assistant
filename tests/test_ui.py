@@ -272,12 +272,10 @@ async def test_push_progress_updates_bar(ui_config):
 
 
 async def test_push_progress_exits_at_100(ui_config):
-    exited = []
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
-        pilot.app.exit = lambda *a, **kw: exited.append(True)
         pilot.app.push_progress(10, 10)
         await pilot.pause(delay=1.5)
-        assert exited
+        assert pilot.app.query_one("#done-view").display
 
 
 async def test_auto_title_switch_renders_with_default_on(ui_config):
@@ -321,3 +319,37 @@ async def test_done_view_has_restart_and_quit_buttons(ui_config):
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
         assert pilot.app.query_one("#restart-btn") is not None
         assert pilot.app.query_one("#quit-btn") is not None
+
+
+async def test_show_done_view_hides_recording_shows_done(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.query_one("#settings-view").display = False
+        pilot.app.query_one("#recording-view").display = True
+        pilot.app._show_done_view()
+        await pilot.pause()
+        assert not pilot.app.query_one("#recording-view").display
+        assert pilot.app.query_one("#done-view").display
+
+
+async def test_stop_button_shows_done_view_not_exit(ui_config):
+    exited = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.exit = lambda *a, **kw: exited.append(True)
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        stop_btn = pilot.app.query_one("#stop-btn", Button)
+        pilot.app.post_message(Button.Pressed(stop_btn))
+        await pilot.pause()
+        assert not exited, "exit() must NOT be called — done-view should show instead"
+        assert pilot.app.query_one("#done-view").display
+
+
+async def test_push_progress_at_100_shows_done_view(ui_config):
+    exited = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.exit = lambda *a, **kw: exited.append(True)
+        pilot.app.push_progress(10, 10)
+        await pilot.pause(delay=1.5)
+        assert not exited, "exit() must NOT be called — done-view should show instead"
+        assert pilot.app.query_one("#done-view").display
