@@ -18,8 +18,9 @@ from .config import AppConfig
 
 def _run_file_picker() -> str | None:
     script = (
-        'set f to choose file with prompt "Select audio file:" '
-        'of type {"wav", "mp3", "m4a", "aiff", "ogg", "flac"}\n'
+        'set f to choose file with prompt "Select audio or video file:" '
+        'of type {"wav", "mp3", "m4a", "aiff", "ogg", "flac",'
+        ' "mp4", "mov", "avi", "mkv", "m4v", "webm", "wmv", "3gp", "ts", "flv"}\n'
         'POSIX path of f'
     )
     try:
