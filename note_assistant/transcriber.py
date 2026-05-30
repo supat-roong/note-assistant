@@ -217,17 +217,17 @@ class MLXWhisperTranscriber(BaseTranscriber):
     def _load(self) -> None:
         try:
             import mlx_whisper
-            from mlx_whisper.transcribe import ModelHolder
-            import mlx.core as mx
-            logger.info("Loading MLX Whisper model '%s'…", self.config.mlx_whisper_model)
-            # Pre-warm ModelHolder so the first transcribe() call doesn't block the pipeline.
-            # ModelHolder caches the model in memory; subsequent calls reuse it.
-            ModelHolder.get_model(self.config.mlx_whisper_model, mx.float16)
+            from huggingface_hub import snapshot_download
+            logger.info("Downloading MLX Whisper model '%s'…", self.config.mlx_whisper_model)
+            # Download model files to local HF cache — safe from a daemon thread.
+            # Do NOT load into Metal here: Metal resources must be created on the thread
+            # that will use them (the pipeline thread), or libc++ aborts on macOS.
+            snapshot_download(repo_id=self.config.mlx_whisper_model)
             self._mlx_whisper = mlx_whisper
-            logger.info("MLX Whisper model ready.")
+            logger.info("MLX Whisper model files ready.")
         except Exception as e:
             self._load_error = str(e)
-            logger.error("Failed to load MLX Whisper model: %s", e, exc_info=True)
+            logger.error("Failed to download MLX Whisper model: %s", e, exc_info=True)
         finally:
             self._ready.set()
 
