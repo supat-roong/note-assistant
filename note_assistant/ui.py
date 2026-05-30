@@ -199,8 +199,12 @@ class NoteAssistantUI(App):
                 with Horizontal(id="backends-row"):
                     with Vertical():
                         yield Label("Transcription")
+                        t_options = [("Apple Speech", "apple")]
+                        if platform.machine() == "arm64":
+                            t_options.append(("Whisper (MLX)", "mlx-whisper"))
+                        t_options.append(("Whisper (CPU)", "faster-whisper"))
                         yield Select(
-                            [("Apple Speech", "apple"), ("Whisper", "faster-whisper")],
+                            t_options,
                             value=self._config.transcription.backend,
                             id="t-backend",
                         )
