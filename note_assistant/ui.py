@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import platform
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
@@ -12,6 +13,23 @@ from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual.widgets import Header, Footer, Label, Button, RichLog, Select, Static, Input
 
 from .config import AppConfig
+
+
+def _run_file_picker() -> str | None:
+    script = (
+        'set f to choose file with prompt "Select audio file:" '
+        'of type {"wav", "mp3", "m4a", "aiff", "ogg", "flac"}\n'
+        'POSIX path of f'
+    )
+    try:
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError("osascript not available on this system")
+    if result.returncode == 0:
+        return result.stdout.strip()
+    if result.returncode == 1:
+        return None  # user pressed Cancel in the dialog
+    raise RuntimeError(f"osascript error: {result.stderr.strip()}")
 
 
 class StatusBar(Static):

@@ -1,8 +1,32 @@
+import subprocess
 import pytest
-from unittest.mock import MagicMock, PropertyMock
-from textual.widgets import Button, Label
-from note_assistant.ui import NoteAssistantUI, StatusBar
+from unittest.mock import MagicMock, PropertyMock, patch
+from textual.widgets import Button, Input, Label
+from note_assistant.ui import NoteAssistantUI, StatusBar, _run_file_picker
 from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
+
+
+def test_run_file_picker_returns_path_on_success():
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = "/Users/bob/audio.wav\n"
+    with patch("subprocess.run", return_value=mock_result):
+        assert _run_file_picker() == "/Users/bob/audio.wav"
+
+
+def test_run_file_picker_returns_none_on_cancel():
+    mock_result = MagicMock()
+    mock_result.returncode = 1
+    mock_result.stdout = ""
+    mock_result.stderr = "User canceled."
+    with patch("subprocess.run", return_value=mock_result):
+        assert _run_file_picker() is None
+
+
+def test_run_file_picker_raises_on_osascript_missing():
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        with pytest.raises(RuntimeError, match="osascript"):
+            _run_file_picker()
 
 
 @pytest.fixture
