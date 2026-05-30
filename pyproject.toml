@@ -21,6 +21,7 @@ dependencies = [
     "mlx>=0.31.2; sys_platform == 'darwin'",
     "mlx-lm>=0.31.3; sys_platform == 'darwin'",
     "apple-fm-sdk>=0.1.1; sys_platform == 'darwin'",
+    "markdown>=3.10.2",
 ]
 
 [dependency-groups]
