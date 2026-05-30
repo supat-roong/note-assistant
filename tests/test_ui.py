@@ -384,3 +384,15 @@ async def test_push_progress_at_100_shows_done_view(ui_config):
         await pilot.pause(delay=1.5)
         assert not exited, "exit() must NOT be called — done-view should show instead"
         assert pilot.app.query_one("#done-view").display
+
+
+async def test_quit_button_calls_exit_with_code_99(ui_config):
+    exit_calls = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.exit = lambda *a, **kw: exit_calls.append((a, kw))
+        btn = pilot.app.query_one("#quit-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert exit_calls, "exit() was not called"
+        args, kwargs = exit_calls[0]
+        assert kwargs.get("return_code") == 99 or (args and args[0] == 99)

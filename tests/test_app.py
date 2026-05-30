@@ -176,3 +176,57 @@ def test_shutdown_skips_title_when_auto_title_disabled(mock_config, mock_transcr
     app._shutdown()
     mock_notes.set_title.assert_not_called()
     mock_notes.close_session.assert_called_once()
+
+
+def test_launch_kills_parent_on_return_code_99():
+    import os
+    import signal
+    from unittest.mock import MagicMock, patch
+    from note_assistant.__main__ import _launch
+    from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
+
+    cfg = AppConfig(
+        audio=AudioConfig(source="mic"),
+        transcription=TranscriptionConfig(backend="faster-whisper"),
+        summarization=SummarizationConfig(backend="ollama"),
+        output=OutputConfig(apple_notes=False, save_transcript=False, save_summary=False),
+    )
+
+    mock_ui = MagicMock()
+    mock_ui.return_code = 99
+
+    kill_calls = []
+
+    with patch("note_assistant.ui.NoteAssistantUI", return_value=mock_ui), \
+         patch("note_assistant.app.NoteAssistantApp"), \
+         patch("os.kill", side_effect=lambda pid, sig: kill_calls.append((pid, sig))), \
+         patch("os.getppid", return_value=12345):
+        _launch(cfg)
+
+    assert (12345, signal.SIGTERM) in kill_calls
+
+
+def test_launch_does_not_kill_parent_on_normal_exit():
+    import os
+    import signal
+    from unittest.mock import MagicMock, patch
+    from note_assistant.__main__ import _launch
+    from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
+
+    cfg = AppConfig(
+        audio=AudioConfig(source="mic"),
+        transcription=TranscriptionConfig(backend="faster-whisper"),
+        summarization=SummarizationConfig(backend="ollama"),
+        output=OutputConfig(apple_notes=False, save_transcript=False, save_summary=False),
+    )
+
+    mock_ui = MagicMock()
+    mock_ui.return_code = 0
+
+    kill_calls = []
+
+    with patch("note_assistant.ui.NoteAssistantUI", return_value=mock_ui), \
+         patch("note_assistant.app.NoteAssistantApp"), \
+         patch("os.kill", side_effect=lambda pid, sig: kill_calls.append((pid, sig))):
+        _launch(cfg)
+    assert not kill_calls

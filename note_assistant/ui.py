@@ -334,6 +334,8 @@ class NoteAssistantUI(App):
             self._paused = False
             self._pipeline = None
             self.query_one("#settings-view").display = True
+        elif event.button.id == "quit-btn":
+            self.exit(return_code=99)
         elif event.button.id == "browse-btn":
             self.run_worker(_run_file_picker, thread=True, name="browse-file")
         elif event.button.id == "start-btn":

@@ -1,6 +1,8 @@
 """CLI entry point — `python -m note_assistant` or `note-assistant` command."""
 from __future__ import annotations
 
+import os
+import signal
 import threading
 from pathlib import Path
 from typing import Annotated, Optional
@@ -164,6 +166,9 @@ def _launch(config: AppConfig) -> None:
             pipeline.stop()
         if pipeline_thread:
             pipeline_thread.join(timeout=30)
+
+    if getattr(ui, "return_code", None) == 99:
+        os.kill(os.getppid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":
