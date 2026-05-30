@@ -9,8 +9,8 @@ from datetime import datetime
 class NotesWriter:
     """Writes transcript + summary live into an Apple Notes note.
 
-    Maintains in-memory buffers and flushes once per throttle window
-    instead of reading + rewriting on every append call.
+    Maintains in-memory buffers and flushes once per throttle window.
+    Body is sent as HTML so Apple Notes renders line breaks correctly.
     """
 
     def __init__(self, title_template: str = "Note Assistant — {date}"):
@@ -26,8 +26,7 @@ class NotesWriter:
         self._closed = False
 
     def open_session(self) -> None:
-        header = f"# {self._title}\n\n---\n\n## Transcript\n\n"
-        self._note_id = self._create_note(header)
+        self._note_id = self._create_note(self._build_html())
         self._note_created = bool(self._note_id)
 
     def append_transcript(self, text: str) -> None:
@@ -52,26 +51,37 @@ class NotesWriter:
         if not force and now - self._last_flush < self._throttle_secs:
             return
         self._last_flush = now
-
-        body = f"# {self._title}\n\n---\n\n## Transcript\n\n"
-        body += "\n".join(self._transcript_lines)
-        if self._summary:
-            body += f"\n\n---\n\n## Summary\n\n{self._summary}"
-        if self._closed:
-            body += "\n\n---\n_Session ended._"
-
         script = f"""
         tell application "Notes"
             set targetNote to note id "{self._note_id}"
-            set body of targetNote to "{self._escape(body)}"
+            set body of targetNote to "{self._as(self._build_html())}"
         end tell
         """
         self._run_osascript(script)
 
-    def _create_note(self, body: str) -> str:
+    def _build_html(self) -> str:
+        """Build the full note body as HTML (Apple Notes uses HTML internally)."""
+        parts = [
+            f"<div><b>{self._he(self._title)}</b></div>",
+            "<div><br></div>",
+            "<div><b>Transcript</b></div>",
+        ]
+        for line in self._transcript_lines:
+            parts.append(f"<div>{self._he(line)}</div>")
+        if self._summary:
+            parts += [
+                "<div><br></div>",
+                "<div><b>Summary</b></div>",
+                f"<div>{self._he(self._summary)}</div>",
+            ]
+        if self._closed:
+            parts += ["<div><br></div>", "<div><i>Session ended.</i></div>"]
+        return "".join(parts)
+
+    def _create_note(self, html: str) -> str:
         script = f"""
         tell application "Notes"
-            set newNote to make new note at folder "Notes" with properties {{name:"{self._title}", body:"{self._escape(body)}"}}
+            set newNote to make new note at folder "Notes" with properties {{name:"{self._title}", body:"{self._as(html)}"}}
             return id of newNote
         end tell
         """
@@ -91,7 +101,13 @@ class NotesWriter:
             return ""
 
     @staticmethod
-    def _escape(text: str) -> str:
+    def _he(text: str) -> str:
+        """Escape text for safe embedding in HTML."""
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    @staticmethod
+    def _as(text: str) -> str:
+        """Escape HTML string for safe embedding in an AppleScript string literal."""
         return (
             text
             .replace("\\", "\\\\")
