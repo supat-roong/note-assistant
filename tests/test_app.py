@@ -161,3 +161,18 @@ def test_on_error_callback_fires(mock_config, failing_transcriber, mock_summariz
         app._process_chunk(chunk)
     assert len(received) == 1
     assert received[0][0] == "transcriber"
+
+
+def test_shutdown_skips_title_when_auto_title_disabled(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    mock_config.output.auto_title = False
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    app._full_summary = "- some meeting notes"
+    mock_notes = MagicMock()
+    app._notes = mock_notes
+    # Replace worker so no threads run
+    app._worker = MagicMock()
+    app._worker.join = MagicMock()
+    app._shutdown()
+    mock_notes.set_title.assert_not_called()
+    mock_notes.close_session.assert_called_once()

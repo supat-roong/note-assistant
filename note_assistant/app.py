@@ -323,7 +323,7 @@ class NoteAssistantApp:
         self._transcriber.close()
         error_bus.unsubscribe(self._route_error)
 
-        if self._notes and self._full_summary:
+        if self.config.output.auto_title and self._notes and self._full_summary:
             title = ""
             est = _estimate_tokens(self._full_summary)
             # Pick first summarizer whose token limit can fit the summary
@@ -336,7 +336,10 @@ class NoteAssistantApp:
                 loop = asyncio.new_event_loop()
                 try:
                     title = loop.run_until_complete(
-                        title_summarizer.generate_title(self._full_summary)
+                        title_summarizer.generate_title(
+                            self._full_summary,
+                            self.config.output.title_prompt_template,
+                        )
                     )
                 finally:
                     loop.close()
