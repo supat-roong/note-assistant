@@ -71,6 +71,11 @@ class NoteAssistantUI(App):
     .setting-group > Horizontal {
         height: auto;
     }
+    #backends-row > Vertical {
+        height: auto;
+        width: 1fr;
+        padding: 0 1;
+    }
     #transcript-panel {
         width: 1fr;
         border: solid $accent;
@@ -136,9 +141,21 @@ class NoteAssistantUI(App):
 
             with Vertical(classes="setting-group"):
                 yield Label("Backends")
-                with Horizontal():
-                    yield Select([("Apple Speech", "apple"), ("Whisper", "faster-whisper")], value=self._config.transcription.backend, id="t-backend")
-                    yield Select([("Apple Intelligence", "apple"), ("MLX (on-device)", "mlx"), ("Ollama", "ollama")], value=self._config.summarization.backend, id="s-backend")
+                with Horizontal(id="backends-row"):
+                    with Vertical():
+                        yield Label("Transcription")
+                        yield Select(
+                            [("Apple Speech", "apple"), ("Whisper", "faster-whisper")],
+                            value=self._config.transcription.backend,
+                            id="t-backend",
+                        )
+                    with Vertical():
+                        yield Label("Summarization")
+                        yield Select(
+                            [("Apple Intelligence", "apple"), ("MLX (on-device)", "mlx"), ("Ollama", "ollama")],
+                            value=self._config.summarization.backend,
+                            id="s-backend",
+                        )
                 yield Label("", id="summarization-status", classes="status-label")
             
             yield Button("🚀 Start Processing", variant="success", id="start-btn")

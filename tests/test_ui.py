@@ -88,6 +88,13 @@ async def test_file_path_input_visible_for_file_source(ui_config):
         assert pilot.app.query_one("#file-path").display
 
 
+async def test_backend_labels_present(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        label_texts = [str(w._Static__content) for w in pilot.app.query("Label")]
+        assert any("Transcription" in t for t in label_texts)
+        assert any("Summarization" in t for t in label_texts)
+
+
 async def test_ctrl_q_binding_exists(ui_config):
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
         bindings = {b.key for b in pilot.app.BINDINGS}
