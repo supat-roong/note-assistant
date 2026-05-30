@@ -1,7 +1,9 @@
 import platform
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from note_assistant.summarizer import OllamaSummarizer, create_summarizer, _REGISTRY
+from note_assistant.summarizer import (
+    AppleFoundationSummarizer, OllamaSummarizer, create_summarizer, _REGISTRY
+)
 from note_assistant.config import SummarizationConfig
 
 
@@ -64,3 +66,41 @@ async def test_ollama_summarizer_translation_appends_instruction():
         async for _ in s.summarize("hello"):
             pass
         assert "Thai" in prompts[0]
+
+
+@pytest.mark.skipif(platform.system() != "Darwin", reason="macOS only")
+async def test_apple_summarizer_raises_when_sdk_missing():
+    import sys
+    with patch.dict(sys.modules, {"apple_fm_sdk": None}):
+        with pytest.raises(RuntimeError, match="apple-fm-sdk not installed"):
+            AppleFoundationSummarizer(SummarizationConfig())
+
+
+@pytest.mark.skipif(platform.system() != "Darwin", reason="macOS only")
+async def test_apple_summarizer_raises_when_model_unavailable():
+    mock_fm = MagicMock()
+    mock_fm.SystemLanguageModel.return_value.is_available.return_value = (False, "not enabled")
+    import sys
+    with patch.dict(sys.modules, {"apple_fm_sdk": mock_fm}):
+        with pytest.raises(RuntimeError, match="not available"):
+            AppleFoundationSummarizer(SummarizationConfig())
+
+
+@pytest.mark.skipif(platform.system() != "Darwin", reason="macOS only")
+async def test_apple_summarizer_streams_tokens():
+    mock_fm = MagicMock()
+    mock_fm.SystemLanguageModel.return_value.is_available.return_value = (True, None)
+
+    async def fake_stream():
+        yield "bullet"
+        yield " one"
+
+    mock_session = MagicMock()
+    mock_session.stream_response = MagicMock(return_value=fake_stream())
+    mock_fm.LanguageModelSession.return_value = mock_session
+
+    import sys
+    with patch.dict(sys.modules, {"apple_fm_sdk": mock_fm}):
+        s = AppleFoundationSummarizer(SummarizationConfig())
+        result = "".join([t async for t in s.summarize("meeting notes")])
+        assert result == "bullet one"

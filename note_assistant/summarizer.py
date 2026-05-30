@@ -22,11 +22,13 @@ class BaseSummarizer(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Apple Foundation Models backend — placeholder (Task 3 will replace this)
+# Apple Foundation Models backend
+# Requires macOS 26+, Apple Silicon, Xcode 26, Apple Intelligence enabled.
+# Install: uv add apple-fm-sdk
 # ---------------------------------------------------------------------------
 
 class AppleFoundationSummarizer(BaseSummarizer):
-    """Placeholder — replaced in Task 3 with apple_fm_sdk implementation."""
+    """Uses Apple Foundation Models via apple-fm-sdk (requires macOS 26+, Apple Silicon)."""
 
     def __init__(
         self,
@@ -34,14 +36,44 @@ class AppleFoundationSummarizer(BaseSummarizer):
         language_input: str = "English",
         language_output: str = "English",
     ) -> None:
-        raise RuntimeError(
-            "Apple Foundation Models backend not yet configured. "
-            "Complete Task 3 of the migration plan."
-        )
+        self.config = config
+        self.language_input = language_input
+        self.language_output = language_output
+        self._check_availability()
+
+    def _check_availability(self) -> None:
+        try:
+            import apple_fm_sdk as fm
+        except ImportError as e:
+            raise RuntimeError(
+                "apple-fm-sdk not installed. Run: uv add apple-fm-sdk"
+            ) from e
+        model = fm.SystemLanguageModel()
+        available, reason = model.is_available()
+        if not available:
+            raise RuntimeError(f"Apple Foundation Models not available: {reason}")
 
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
-        raise RuntimeError("Not implemented")
-        yield  # pragma: no cover
+        import apple_fm_sdk as fm
+        prompt = self.config.prompt_template.format(transcript=transcript)
+        if self.language_input != self.language_output:
+            prompt += (
+                f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
+                f"Please translate the resulting summary into {self.language_output}."
+            )
+        session = fm.LanguageModelSession()
+        try:
+            async for chunk in session.stream_response(prompt):
+                yield chunk
+        except fm.ExceededContextWindowSizeError:
+            logger.warning(
+                "Transcript exceeded 4096-token context window — retrying with truncated prompt"
+            )
+            retry_session = fm.LanguageModelSession()
+            async for chunk in retry_session.stream_response(prompt[-3000:]):
+                yield chunk
+        except fm.AssetsUnavailableError as e:
+            raise RuntimeError(f"Apple Intelligence assets unavailable: {e}") from e
 
 
 # ---------------------------------------------------------------------------
