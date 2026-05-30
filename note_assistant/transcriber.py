@@ -50,17 +50,38 @@ class AppleSpeechTranscriber(BaseTranscriber):
             ) from e
 
     def _check_permission(self) -> None:
+        import time
+        from CoreFoundation import CFRunLoopRunInMode, kCFRunLoopDefaultMode
+
         status = self._Speech.SFSpeechRecognizer.authorizationStatus()
-        statuses = {
-            0: "NotDetermined",
-            1: "Denied",
-            2: "Restricted",
-            3: "Authorized",
-        }
-        logger.debug("Apple Speech authorization: %s", statuses.get(status, "Unknown"))
-        if status == 0:  # NotDetermined
-            logger.info("Requesting Speech authorization")
-            self._Speech.SFSpeechRecognizer.requestAuthorization_(lambda _: None)
+        if status == 3:  # Already authorized
+            return
+
+        if status == 1:  # Denied
+            raise RuntimeError(
+                "Speech Recognition permission denied. "
+                "Enable Note Assistant in System Settings › Privacy & Security › Speech Recognition."
+            )
+        if status == 2:  # Restricted
+            raise RuntimeError("Speech Recognition is restricted on this device.")
+
+        # status == 0: NotDetermined — request and wait (up to 30 s for user to respond)
+        done = threading.Event()
+        def _auth_callback(new_status: int) -> None:
+            done.set()
+
+        logger.info("Requesting Speech Recognition authorization — please respond to the system prompt")
+        self._Speech.SFSpeechRecognizer.requestAuthorization_(_auth_callback)
+        deadline = time.monotonic() + 30.0
+        while not done.is_set() and time.monotonic() < deadline:
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, True)
+
+        final_status = self._Speech.SFSpeechRecognizer.authorizationStatus()
+        if final_status != 3:
+            raise RuntimeError(
+                "Speech Recognition permission not granted. "
+                "Enable Note Assistant in System Settings › Privacy & Security › Speech Recognition, then restart."
+            )
 
     def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
         """Transcribe audio array using Apple Speech framework."""
