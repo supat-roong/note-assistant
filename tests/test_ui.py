@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 from textual.widgets import Button
-from note_assistant.ui import NoteAssistantUI
+from note_assistant.ui import NoteAssistantUI, StatusBar
 from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
 
 
@@ -86,6 +86,28 @@ async def test_file_path_input_visible_for_file_source(ui_config):
         pilot.app._update_file_input_visibility("file")
         await pilot.pause()
         assert pilot.app.query_one("#file-path").display
+
+
+async def test_status_bar_shows_paused_when_ctrl_p(ui_config):
+    pipeline_mock = MagicMock()
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        pilot.app.set_pipeline(pipeline_mock)
+        await pilot.press("ctrl+p")
+        await pilot.pause()
+        status = pilot.app.query_one(StatusBar)
+        assert "Paused" in str(status._Static__content)
+
+
+async def test_status_bar_shows_idle_when_recording_starts(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        status = pilot.app.query_one(StatusBar)
+        assert "Idle" in str(status._Static__content)
 
 
 async def test_start_with_nonexistent_file_shows_error(ui_config, tmp_path):

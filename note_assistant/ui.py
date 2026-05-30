@@ -16,8 +16,13 @@ from .config import AppConfig
 
 class StatusBar(Static):
     def update_status(self, source: str, t_backend: str, s_backend: str,
-                      chunks: int, is_capturing: bool) -> None:
-        heartbeat = "🎤 [green]Capturing...[/]" if is_capturing else "🎤 [yellow]Idle[/]"
+                      chunks: int, is_capturing: bool, is_paused: bool = False) -> None:
+        if is_paused:
+            heartbeat = "⏸ [yellow]Paused[/]"
+        elif is_capturing:
+            heartbeat = "🎤 [green]Capturing...[/]"
+        else:
+            heartbeat = "🎤 [dim]Idle[/]"
         self.update(
             f"Src: [cyan]{source}[/] | "
             f"T: [cyan]{t_backend}[/] | S: [cyan]{s_backend}[/] | "
@@ -221,6 +226,7 @@ class NoteAssistantUI(App):
             
             self.query_one("#settings-view").display = False
             self.query_one("#recording-view").display = True
+            self._update_status_bar()
             self._start_pipeline(self._config)
 
     def on_audio_chunk(self) -> None:
@@ -253,8 +259,9 @@ class NoteAssistantUI(App):
         is_capturing = False
         if self._last_chunk_at:
             is_capturing = (datetime.now() - self._last_chunk_at).total_seconds() < 4.0
-        
+
         self.query_one(StatusBar).update_status(
             self._config.audio.source, self._config.transcription.backend,
-            self._config.summarization.backend, self._chunk_count, is_capturing
+            self._config.summarization.backend, self._chunk_count,
+            is_capturing=is_capturing, is_paused=self._paused,
         )
