@@ -288,7 +288,8 @@ class NoteAssistantUI(App):
     def _update_transcription_for_lang(self, lang: str) -> None:
         t_backend = self.query_one("#t-backend", Select)
         if lang == "Auto":
-            t_backend.value = "faster-whisper"
+            # Both Whisper backends support auto-detect; prefer MLX on Apple Silicon.
+            t_backend.value = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
             t_backend.disabled = True
         else:
             t_backend.disabled = False
