@@ -180,20 +180,28 @@ class NoteAssistantApp:
 
         summarizers = [self._summarizer]
         if summarizer is None:
-            for backend in ("mlx", "ollama", "apple"):
-                if backend == config.summarization.backend:
-                    continue
+            kw = dict(language_input=config.language_input, language_output=config.language_output)
+            sc = config.summarization
+            candidates: list[tuple[str, dict]] = []
+            if sc.backend != "mlx":
+                candidates.append(("mlx", {"mlx_model": sc.mlx_model}))
+                candidates.append(("mlx", {"mlx_model": sc.mlx_fallback_model}))
+            else:
+                candidates.append(("mlx", {"mlx_model": sc.mlx_fallback_model}))
+            if sc.backend != "ollama":
+                candidates.append(("ollama", {"ollama_model": sc.ollama_model}))
+                candidates.append(("ollama", {"ollama_model": sc.ollama_fallback_model}))
+            else:
+                candidates.append(("ollama", {"ollama_model": sc.ollama_fallback_model}))
+
+            for backend, overrides in candidates:
                 try:
-                    fb_cfg = config.summarization.model_copy(update={"backend": backend})
-                    summarizers.append(create_summarizer(
-                        fb_cfg,
-                        language_input=config.language_input,
-                        language_output=config.language_output,
-                    ))
-                    logger.debug("Registered fallback summarizer: %s", backend)
-                    break
-                except Exception:
-                    pass
+                    fb_cfg = sc.model_copy(update={"backend": backend, **overrides})
+                    fb = create_summarizer(fb_cfg, **kw)
+                    summarizers.append(fb)
+                    logger.debug("Registered fallback: %s %s", backend, overrides)
+                except Exception as e:
+                    logger.debug("Could not register fallback %s %s: %s", backend, overrides, e)
 
         self._worker = SummarizationWorker(
             summarizers,

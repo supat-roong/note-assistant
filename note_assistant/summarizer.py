@@ -8,6 +8,24 @@ from typing import Any, AsyncGenerator
 from .config import SummarizationConfig
 from note_assistant import logger
 
+# Known context window sizes (tokens) for specific models
+_CONTEXT_LENGTHS: dict[str, int] = {
+    "mlx-community/Qwen3-8B-4bit": 40_960,
+    "mlx-community/Qwen3-14B-4bit": 131_072,
+    "mlx-community/gemma-3-12b-it-4bit": 131_072,
+    "mlx-community/gemma-3-12b-it-qat-4bit": 131_072,
+    "mlx-community/gemma-4-e4b-it-4bit": 131_072,
+    "gemma4:e4b": 131_072,
+    "mlx-community/Qwen2.5-14B-Instruct-1M-4bit": 1_000_000,
+    "mlx-community/Llama-3.2-3B-Instruct-4bit": 131_072,
+    "qwen3:8b": 40_960,
+    "qwen3:14b": 131_072,
+    "gemma3:12b": 131_072,
+    "gemma4:e4b": 131_072,
+    "llama3.2:3b": 131_072,
+    "llama3.1:8b": 131_072,
+}
+
 
 # ---------------------------------------------------------------------------
 # Abstract base
@@ -121,30 +139,29 @@ class AppleFoundationSummarizer(BaseSummarizer):
 # ---------------------------------------------------------------------------
 
 class MLXSummarizer(BaseSummarizer):
-    """On-device summarization using MLX (Apple Silicon GPU). No Xcode needed."""
-    TOKEN_LIMIT = 40960
+    """On-device summarization using MLX (Apple Silicon GPU). Lazy-loads model on first use."""
 
-    DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
+    DEFAULT_MODEL = "mlx-community/Qwen3-8B-4bit"
 
-    def __init__(self, config: SummarizationConfig, language_input: str = "English", language_output: str = "English"):
+    def __init__(self, config: SummarizationConfig, language_input: str = "English",
+                 language_output: str = "English", model_override: str | None = None):
         self.config = config
         self.language_input = language_input
         self.language_output = language_output
+        self._model_name = model_override or getattr(config, "mlx_model", self.DEFAULT_MODEL)
+        self.TOKEN_LIMIT = _CONTEXT_LENGTHS.get(self._model_name, 40_960)
         self._model = None
         self._tokenizer = None
-        self._load()
+        # Validate mlx-lm is installed at init time (fail fast)
+        try:
+            import mlx_lm  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError("mlx-lm not installed. Run: uv add mlx mlx-lm") from e
 
     def _load(self) -> None:
-        try:
-            from mlx_lm import load
-        except ImportError as e:
-            raise RuntimeError(
-                "mlx-lm not installed. Run: uv add mlx mlx-lm"
-            ) from e
-
-        model_name = getattr(self.config, "mlx_model", self.DEFAULT_MODEL)
-        logger.info("Loading MLX model: %s (first run downloads ~2 GB)", model_name)
-        self._model, self._tokenizer = load(model_name)
+        from mlx_lm import load
+        logger.info("Loading MLX model: %s", self._model_name)
+        self._model, self._tokenizer = load(self._model_name)
 
     def warmup(self) -> None:
         if self._model is None:
@@ -152,6 +169,8 @@ class MLXSummarizer(BaseSummarizer):
 
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         from mlx_lm import stream_generate
+        if self._model is None:
+            self._load()
 
         prompt = self.config.prompt_template.format(transcript=transcript)
         if self.language_input != self.language_output:
@@ -177,10 +196,13 @@ class MLXSummarizer(BaseSummarizer):
 class OllamaSummarizer(BaseSummarizer):
     """Uses Ollama Python SDK for streaming summarization."""
 
-    def __init__(self, config: SummarizationConfig, language_input: str = "English", language_output: str = "English"):
+    def __init__(self, config: SummarizationConfig, language_input: str = "English",
+                 language_output: str = "English", model_override: str | None = None):
         self.config = config
         self.language_input = language_input
         self.language_output = language_output
+        self._model_name = model_override or config.ollama_model
+        self.TOKEN_LIMIT = _CONTEXT_LENGTHS.get(self._model_name, 40_960)
         self._ollama: Any = None
         self._load()
 
@@ -198,7 +220,7 @@ class OllamaSummarizer(BaseSummarizer):
         async def _ping() -> None:
             try:
                 await self._ollama.chat(
-                    model=self.config.ollama_model,
+                    model=self._model_name,
                     messages=[{"role": "user", "content": "hi"}],
                     stream=False,
                     options={"num_predict": 1},
@@ -216,7 +238,7 @@ class OllamaSummarizer(BaseSummarizer):
             )
 
         stream = await self._ollama.chat(
-            model=self.config.ollama_model,
+            model=self._model_name,
             messages=[{"role": "user", "content": prompt}],
             stream=True,
         )
@@ -233,7 +255,7 @@ class OllamaSummarizer(BaseSummarizer):
             + summary[:1000]
         )
         response = await self._ollama.chat(
-            model=self.config.ollama_model,
+            model=self._model_name,
             messages=[{"role": "user", "content": prompt}],
             stream=False,
         )

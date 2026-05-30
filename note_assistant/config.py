@@ -37,7 +37,9 @@ class SummarizationConfig(BaseModel):
         "{transcript}"
     )
     mlx_model: str = "mlx-community/Qwen3-8B-4bit"
+    mlx_fallback_model: str = "mlx-community/gemma-4-e4b-it-4bit"
     ollama_model: str = "qwen3:8b"
+    ollama_fallback_model: str = "gemma4:e4b"
     ollama_host: str = "http://localhost:11434"
 
 
