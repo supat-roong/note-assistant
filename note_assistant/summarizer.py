@@ -20,9 +20,14 @@ def _mlx_context_length(model_name: str) -> int | None:
         return None
     try:
         data = json.loads(configs[-1].read_text())
-        return data.get("max_position_embeddings") or data.get("max_context_length")
+        # Top-level first, then nested sub-configs (e.g. Gemma 4 uses text_config)
+        for section in [data, *[v for v in data.values() if isinstance(v, dict)]]:
+            val = section.get("max_position_embeddings") or section.get("max_context_length")
+            if val:
+                return int(val)
     except Exception:
-        return None
+        pass
+    return None
 
 
 def _ollama_context_length(model_name: str, host: str = "http://localhost:11434") -> int | None:
@@ -37,9 +42,9 @@ def _ollama_context_length(model_name: str, host: str = "http://localhost:11434"
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             info = _json.loads(resp.read())
-        mi = info.get("modelinfo", {})
+        mi = info.get("model_info", {})
         for key, val in mi.items():
-            if "context" in key.lower() or "ctx_length" in key.lower():
+            if key.endswith(".context_length"):
                 return int(val)
     except Exception:
         pass
