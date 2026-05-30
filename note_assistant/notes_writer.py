@@ -66,11 +66,10 @@ class NotesWriter:
             "<div><br></div>",
         ]
         if self._summary:
-            parts += [
-                "<div><b>Summary</b></div>",
-                f"<div>{self._he(self._summary)}</div>",
-                "<div><br></div>",
-            ]
+            parts.append("<div><b>Summary</b></div>")
+            for line in self._summary.splitlines():
+                parts.append(f"<div>{self._he(line) or '<br>'}</div>")
+            parts.append("<div><br></div>")
         parts.append("<div><b>Transcript</b></div>")
         for line in self._transcript_lines:
             parts.append(f"<div>{self._he(line)}</div>")
