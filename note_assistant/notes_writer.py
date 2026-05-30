@@ -64,16 +64,16 @@ class NotesWriter:
         parts = [
             f"<div><b>{self._he(self._title)}</b></div>",
             "<div><br></div>",
-            "<div><b>Transcript</b></div>",
         ]
-        for line in self._transcript_lines:
-            parts.append(f"<div>{self._he(line)}</div>")
         if self._summary:
             parts += [
-                "<div><br></div>",
                 "<div><b>Summary</b></div>",
                 f"<div>{self._he(self._summary)}</div>",
+                "<div><br></div>",
             ]
+        parts.append("<div><b>Transcript</b></div>")
+        for line in self._transcript_lines:
+            parts.append(f"<div>{self._he(line)}</div>")
         if self._closed:
             parts += ["<div><br></div>", "<div><i>Session ended.</i></div>"]
         return "".join(parts)
