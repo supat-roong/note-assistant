@@ -81,6 +81,18 @@ class NoteAssistantUI(App):
         width: 1fr;
         padding: 0 1;
     }
+    #stop-row {
+        height: auto;
+        padding: 0 1;
+    }
+    #elapsed-label {
+        margin-left: 2;
+        height: 1;
+        content-align: left middle;
+    }
+    #panels-row {
+        height: 1fr;
+    }
     #transcript-panel {
         width: 1fr;
         border: solid $accent;
@@ -166,21 +178,33 @@ class NoteAssistantUI(App):
             yield Button("🚀 Start Processing", variant="success", id="start-btn")
 
         # Recording View
-        with Horizontal(id="recording-view"):
-            with ScrollableContainer(id="transcript-panel"):
-                yield Label("📝 Transcript")
-                yield RichLog(id="transcript-log", wrap=True)
-            with ScrollableContainer(id="summary-panel"):
-                yield Label("✨ Summary")
-                yield RichLog(id="summary-log", wrap=True)
+        with Vertical(id="recording-view"):
+            with Horizontal(id="stop-row"):
+                yield Button("⏹ Stop", variant="error", id="stop-btn")
+                yield Label("00:00", id="elapsed-label")
+            with Horizontal(id="panels-row"):
+                with ScrollableContainer(id="transcript-panel"):
+                    yield Label("📝 Transcript")
+                    yield RichLog(id="transcript-log", wrap=True)
+                with ScrollableContainer(id="summary-panel"):
+                    yield Label("✨ Summary")
+                    yield RichLog(id="summary-log", wrap=True)
 
         yield StatusBar(id="status-bar")
         yield Footer()
 
     def on_mount(self) -> None:
         self._check_apple_intelligence()
-        # Initial visibility
         self._update_file_input_visibility(self._config.audio.source)
+        self.set_interval(1.0, self._tick_elapsed)
+
+    def _tick_elapsed(self) -> None:
+        if self._pipeline is None:
+            return
+        try:
+            self.query_one("#elapsed-label", Label).update(self._pipeline.elapsed)
+        except Exception:
+            pass
 
     def _check_apple_intelligence(self) -> None:
         try:
@@ -206,7 +230,9 @@ class NoteAssistantUI(App):
         field.display = (source == "file")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "start-btn":
+        if event.button.id == "stop-btn":
+            self.exit()
+        elif event.button.id == "start-btn":
             # Update config
             self._config.audio.source = self.query_one("#audio-source", Select).value
             if self._config.audio.source == "file":

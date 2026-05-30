@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import MagicMock
-from textual.widgets import Button
+from unittest.mock import MagicMock, PropertyMock
+from textual.widgets import Button, Label
 from note_assistant.ui import NoteAssistantUI, StatusBar
 from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
 
@@ -86,6 +86,28 @@ async def test_file_path_input_visible_for_file_source(ui_config):
         pilot.app._update_file_input_visibility("file")
         await pilot.pause()
         assert pilot.app.query_one("#file-path").display
+
+
+async def test_stop_button_present_in_recording_view(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert pilot.app.query_one("#stop-btn") is not None
+
+
+async def test_elapsed_label_updates_when_pipeline_set(ui_config):
+    pipeline_mock = MagicMock()
+    type(pipeline_mock).elapsed = PropertyMock(return_value="01:23")
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        pilot.app.set_pipeline(pipeline_mock)
+        pilot.app._tick_elapsed()
+        await pilot.pause()
+        label = pilot.app.query_one("#elapsed-label", Label)
+        assert str(label._Static__content) == "01:23"
 
 
 async def test_status_bar_shows_paused_when_ctrl_p(ui_config):
