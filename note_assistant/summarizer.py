@@ -26,6 +26,9 @@ class BaseSummarizer(ABC):
         """Generate a short title (≤5 words) from the summary. Override in subclasses."""
         return ""
 
+    def warmup(self) -> None:
+        """Pre-load model into memory so the first summarize() call is fast."""
+
 
 # ---------------------------------------------------------------------------
 # Apple Foundation Models backend
@@ -143,6 +146,10 @@ class MLXSummarizer(BaseSummarizer):
         logger.info("Loading MLX model: %s (first run downloads ~2 GB)", model_name)
         self._model, self._tokenizer = load(model_name)
 
+    def warmup(self) -> None:
+        if self._model is None:
+            self._load()
+
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         from mlx_lm import stream_generate
 
@@ -185,6 +192,20 @@ class OllamaSummarizer(BaseSummarizer):
             raise RuntimeError(
                 "ollama package not installed. Run: uv pip install ollama"
             ) from e
+
+    def warmup(self) -> None:
+        import asyncio
+        async def _ping() -> None:
+            try:
+                await self._ollama.chat(
+                    model=self.config.ollama_model,
+                    messages=[{"role": "user", "content": "hi"}],
+                    stream=False,
+                    options={"num_predict": 1},
+                )
+            except Exception:
+                pass
+        asyncio.run(_ping())
 
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         prompt = self.config.prompt_template.format(transcript=transcript)

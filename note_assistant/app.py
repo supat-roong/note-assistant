@@ -57,6 +57,7 @@ class SummarizationWorker(threading.Thread):
         self._q: queue.Queue[str | None] = queue.Queue()
         self._paused_event = threading.Event()
         self._last_queue_warning = 0.0
+        self._warmed: set[int] = set()
 
     def enqueue(self, window: str) -> None:
         import time
@@ -103,12 +104,18 @@ class SummarizationWorker(threading.Thread):
         est_tokens = _estimate_tokens(window)
         for idx, summarizer in enumerate(self._summarizers):
             limit = summarizer.TOKEN_LIMIT
-            if limit and est_tokens > int(limit * 0.85):
-                logger.info(
-                    "Skipping backend %d: ~%d tokens exceeds %.0f%% of %d-token limit",
-                    idx, est_tokens, 85, limit,
-                )
-                continue
+            if limit:
+                pct = est_tokens / limit
+                if pct >= 0.70 and idx + 1 < len(self._summarizers) and (idx + 1) not in self._warmed:
+                    # Background warmup of next fallback backend at 70%
+                    next_s = self._summarizers[idx + 1]
+                    self._warmed.add(idx + 1)
+                    t = threading.Thread(target=next_s.warmup, daemon=True, name=f"warmup-{idx+1}")
+                    t.start()
+                    logger.info("Triggered background warmup of backend %d at ~%.0f%% token usage", idx + 1, pct * 100)
+                if pct >= 0.90:
+                    logger.info("Skipping backend %d: ~%d tokens = %.0f%% of %d-token limit", idx, est_tokens, pct * 100, limit)
+                    continue
             last = ""
             try:
                 async for chunk in summarizer.summarize(window):
@@ -314,7 +321,7 @@ class NoteAssistantApp:
             # Pick first summarizer whose token limit can fit the summary
             title_summarizer = next(
                 (s for s in self._worker._summarizers
-                 if s.TOKEN_LIMIT is None or est <= int(s.TOKEN_LIMIT * 0.85)),
+                 if s.TOKEN_LIMIT is None or est <= int(s.TOKEN_LIMIT * 0.90)),
                 self._worker._summarizers[-1],
             )
             try:
