@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual.widgets import Header, Footer, Label, Button, RichLog, Select, Static, Input
+from textual.worker import WorkerState
 
 from .config import AppConfig
 
@@ -256,6 +257,8 @@ class NoteAssistantUI(App):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "stop-btn":
             self.exit()
+        elif event.button.id == "browse-btn":
+            self.run_worker(_run_file_picker, thread=True, name="browse-file")
         elif event.button.id == "start-btn":
             # Update config
             self._config.audio.source = self.query_one("#audio-source", Select).value
@@ -278,6 +281,16 @@ class NoteAssistantUI(App):
             self.query_one("#recording-view").display = True
             self._update_status_bar()
             self._start_pipeline(self._config)
+
+    def on_worker_state_changed(self, event) -> None:
+        if event.worker.name != "browse-file":
+            return
+        if event.state == WorkerState.SUCCESS:
+            path = event.worker.result
+            if path:
+                self.query_one("#file-path", Input).value = path
+        elif event.state == WorkerState.ERROR:
+            self.notify("File picker unavailable — enter path manually", severity="warning")
 
     def on_audio_chunk(self) -> None:
         self._last_chunk_at = datetime.now()

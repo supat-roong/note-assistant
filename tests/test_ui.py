@@ -206,3 +206,43 @@ async def test_pause_resume_via_ctrl_p(ui_config):
         pipeline_mock.pause.assert_called_once()
         await pilot.press("ctrl+p")
         pipeline_mock.resume.assert_called_once()
+
+
+async def test_browse_button_populates_file_path_on_success(ui_config, tmp_path):
+    fake_path = str(tmp_path / "audio.wav")
+    (tmp_path / "audio.wav").touch()
+    with patch("note_assistant.ui._run_file_picker", return_value=fake_path):
+        async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+            pilot.app._update_file_input_visibility("file")
+            await pilot.pause()
+            btn = pilot.app.query_one("#browse-btn", Button)
+            pilot.app.post_message(Button.Pressed(btn))
+            await pilot.pause(delay=0.5)
+            assert pilot.app.query_one("#file-path", Input).value == fake_path
+
+
+async def test_browse_button_cancel_leaves_path_unchanged(ui_config):
+    with patch("note_assistant.ui._run_file_picker", return_value=None):
+        async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+            pilot.app._update_file_input_visibility("file")
+            await pilot.pause()
+            pilot.app.query_one("#file-path", Input).value = "/existing/path.wav"
+            btn = pilot.app.query_one("#browse-btn", Button)
+            pilot.app.post_message(Button.Pressed(btn))
+            await pilot.pause(delay=0.5)
+            assert pilot.app.query_one("#file-path", Input).value == "/existing/path.wav"
+
+
+async def test_browse_button_notifies_on_osascript_error(ui_config):
+    from textual.worker import WorkerState
+    notified = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
+        pilot.app.notify = lambda msg, **kw: notified.append(msg)
+        mock_worker = MagicMock()
+        mock_worker.name = "browse-file"
+        mock_event = MagicMock()
+        mock_event.worker = mock_worker
+        mock_event.state = WorkerState.ERROR
+        pilot.app.on_worker_state_changed(mock_event)
+        await pilot.pause()
+        assert any("picker" in n.lower() or "unavailable" in n.lower() for n in notified)
