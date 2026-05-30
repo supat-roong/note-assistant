@@ -121,7 +121,7 @@ def _launch(config: AppConfig) -> None:
             ui.call_from_thread(ui.push_error, "pipeline", str(e), "error")
             return
         ui.call_from_thread(ui.set_pipeline, pipeline)
-        pipeline_thread = threading.Thread(target=pipeline.run, daemon=True)
+        pipeline_thread = threading.Thread(target=pipeline.run, daemon=False)
         pipeline_thread.start()
 
     def start_pipeline_async(updated_config: AppConfig) -> None:
@@ -135,7 +135,7 @@ def _launch(config: AppConfig) -> None:
         if pipeline:
             pipeline.stop()
         if pipeline_thread:
-            pipeline_thread.join(timeout=2)
+            pipeline_thread.join(timeout=30)
 
 
 if __name__ == "__main__":
