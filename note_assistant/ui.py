@@ -288,11 +288,11 @@ class NoteAssistantUI(App):
     def _update_transcription_for_lang(self, lang: str) -> None:
         t_backend = self.query_one("#t-backend", Select)
         if lang == "Auto":
-            # Both Whisper backends support auto-detect; prefer MLX on Apple Silicon.
-            t_backend.value = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
-            t_backend.disabled = True
-        else:
-            t_backend.disabled = False
+            # Apple Speech requires a fixed locale — switch away from it.
+            # Both Whisper backends support auto-detect; leave dropdown enabled
+            # so the user can choose between MLX and CPU.
+            if t_backend.value == "apple":
+                t_backend.value = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
 
     def _update_file_input_visibility(self, source: str) -> None:
         row = self.query_one("#file-path-row")
@@ -319,10 +319,10 @@ class NoteAssistantUI(App):
             self._config.language_input = self.query_one("#lang-input", Select).value
             self._config.language_output = self.query_one("#lang-output", Select).value
             self._config.transcription.language = self._LANG_TO_WHISPER.get(self._config.language_input)
-            if self._config.language_input == "Auto":
-                self._config.transcription.backend = "faster-whisper"
-            else:
-                self._config.transcription.backend = self.query_one("#t-backend", Select).value
+            chosen_backend = self.query_one("#t-backend", Select).value
+            if self._config.language_input == "Auto" and chosen_backend == "apple":
+                chosen_backend = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
+            self._config.transcription.backend = chosen_backend
             self._config.summarization.backend = self.query_one("#s-backend", Select).value
             self._config.output.auto_title = self.query_one("#auto-title", Switch).value
 
