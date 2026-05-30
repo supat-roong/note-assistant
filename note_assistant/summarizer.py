@@ -12,7 +12,7 @@ from note_assistant import logger
 
 
 def _mlx_context_length(model_name: str) -> int | None:
-    """Read max_position_embeddings from the model's cached config.json."""
+    """Read context window from the model's cached HuggingFace config.json."""
     slug = model_name.replace("/", "--").replace(":", "-")
     base = pathlib.Path.home() / ".cache/huggingface/hub"
     configs = sorted(base.glob(f"models--{slug}/snapshots/*/config.json"))
@@ -20,13 +20,35 @@ def _mlx_context_length(model_name: str) -> int | None:
         return None
     try:
         data = json.loads(configs[-1].read_text())
-        # Top-level first, then nested sub-configs (e.g. Gemma 4 uses text_config)
-        for section in [data, *[v for v in data.values() if isinstance(v, dict)]]:
-            val = section.get("max_position_embeddings") or section.get("max_context_length")
-            if val:
-                return int(val)
+        # Collect all dicts to search (top-level + one level of nesting)
+        sections = [data] + [v for v in data.values() if isinstance(v, dict)]
+        # 1. Explicit keys
+        for section in sections:
+            for key in ("max_position_embeddings", "max_context_length", "max_seq_len"):
+                val = section.get(key)
+                if val and isinstance(val, int) and 1024 <= val <= 10_000_000:
+                    return val
+        # 2. rope_scaling: base × factor when original_max_position_embeddings is set
+        for section in sections:
+            rs = section.get("rope_scaling")
+            if isinstance(rs, dict):
+                orig = rs.get("original_max_position_embeddings")
+                factor = rs.get("factor", 1)
+                if orig:
+                    return int(orig * factor)
     except Exception:
         pass
+    # 3. Family fallback for models whose configs omit the context window
+    _FAMILY_CONTEXT = {
+        "gemma-3": 131_072, "gemma3": 131_072,
+        "gemma-4": 131_072, "gemma4": 131_072,
+        "qwen2.5": 131_072, "qwen3": 40_960,
+        "llama-3.1": 131_072, "llama-3.2": 131_072,
+    }
+    lower = model_name.lower()
+    for family, ctx in _FAMILY_CONTEXT.items():
+        if family in lower:
+            return ctx
     return None
 
 
