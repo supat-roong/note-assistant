@@ -25,6 +25,7 @@ def test_faster_whisper_transcribes_text():
     with patch.object(FasterWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="faster-whisper", whisper_model="tiny")
         t = FasterWhisperTranscriber(cfg)
+        t._ready.set()  # simulate successful background load
         seg = Mock()
         seg.text = " Hello world"
         t._model = Mock()
@@ -37,6 +38,7 @@ def test_faster_whisper_empty_segments_returns_empty():
     with patch.object(FasterWhisperTranscriber, "_load"):
         cfg = TranscriptionConfig(backend="faster-whisper", whisper_model="tiny")
         t = FasterWhisperTranscriber(cfg)
+        t._ready.set()  # simulate successful background load
         t._model = Mock()
         t._model.transcribe.return_value = ([], {})
         audio = np.zeros(1600, dtype=np.float32)
