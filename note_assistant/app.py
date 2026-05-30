@@ -253,6 +253,7 @@ class NoteAssistantApp:
         error_bus.unsubscribe(self._route_error)
 
         if self._notes and self._full_summary:
+            title = ""
             try:
                 loop = asyncio.new_event_loop()
                 try:
@@ -261,11 +262,14 @@ class NoteAssistantApp:
                     )
                 finally:
                     loop.close()
-                if title:
-                    new_name = f"{title} — {self._notes._date_str} #Note Assistant"
-                    self._notes.set_title(new_name)
             except Exception as e:
-                logger.warning("Could not generate note title: %s", e)
+                logger.warning("Could not generate note title via LLM: %s", e)
+            if not title:
+                # Fallback: first bullet of summary, up to 6 words
+                first = self._full_summary.split("\n")[0].strip().lstrip("- ").lstrip("* ")
+                title = " ".join(first.split()[:6])
+            if title:
+                self._notes.set_title(f"{title} — {self._notes._date_str} #Note Assistant")
 
         if self._notes:
             self._notes.close_session()

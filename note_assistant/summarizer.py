@@ -90,20 +90,24 @@ class AppleFoundationSummarizer(BaseSummarizer):
             raise RuntimeError(f"Apple Intelligence assets unavailable: {e}") from e
 
     async def generate_title(self, summary: str) -> str:
-        prompt = (
-            f"Generate a concise, informative title of 5 words or less for these notes. "
-            f"Write the title in {self.language_output}. "
-            "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
-            + summary[:1000]
-        )
-        session = self._fm.LanguageModelSession()
-        result = ""
-        try:
-            async for chunk in session.stream_response(prompt):
-                result = chunk
-        except Exception:
-            pass
-        return result.strip().strip('"').strip("'").rstrip(".")
+        # Try requested output language first, fall back to English if unsupported
+        for lang in [self.language_output, "English"]:
+            prompt = (
+                f"Generate a concise, informative title of 5 words or less for these notes. "
+                f"Write the title in {lang}. "
+                "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
+                + summary[:1000]
+            )
+            result = ""
+            try:
+                session = self._fm.LanguageModelSession()
+                async for chunk in session.stream_response(prompt):
+                    result = chunk
+                if result.strip():
+                    return result.strip().strip('"').strip("'").rstrip(".")
+            except Exception as e:
+                logger.debug("generate_title in %s failed: %s", lang, e)
+        return ""
 
 
 # ---------------------------------------------------------------------------
