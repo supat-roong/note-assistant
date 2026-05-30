@@ -37,7 +37,7 @@ class SummarizationConfig(BaseModel):
         "{transcript}"
     )
     mlx_model: str = "mlx-community/Llama-3.2-3B-Instruct-4bit"
-    ollama_model: str = "llama3.2:3b"
+    ollama_model: str = "qwen3:8b"
     ollama_host: str = "http://localhost:11434"
 
 
