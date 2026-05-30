@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import platform
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator, AsyncIterator
+from typing import Any, AsyncGenerator
 
 from .config import SummarizationConfig
 from note_assistant import logger
@@ -68,10 +68,19 @@ class AppleFoundationSummarizer(BaseSummarizer):
                 yield chunk
         except fm.ExceededContextWindowSizeError:
             logger.warning(
-                "Transcript exceeded 4096-token context window — retrying with truncated prompt"
+                "Transcript exceeded 4096-token context window — retrying with truncated transcript"
             )
+            # Truncate the transcript (not the formatted prompt) so the instruction header is preserved
+            overhead = len(prompt) - len(transcript)
+            budget = max(0, 3000 - overhead)
+            retry_prompt = self.config.prompt_template.format(transcript=transcript[-budget:])
+            if self.language_input != self.language_output:
+                retry_prompt += (
+                    f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
+                    f"Please translate the resulting summary into {self.language_output}."
+                )
             retry_session = fm.LanguageModelSession()
-            async for chunk in retry_session.stream_response(prompt[-3000:]):
+            async for chunk in retry_session.stream_response(retry_prompt):
                 yield chunk
         except fm.AssetsUnavailableError as e:
             raise RuntimeError(f"Apple Intelligence assets unavailable: {e}") from e
