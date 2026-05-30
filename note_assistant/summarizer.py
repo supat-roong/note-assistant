@@ -91,7 +91,8 @@ class AppleFoundationSummarizer(BaseSummarizer):
 
     async def generate_title(self, summary: str) -> str:
         prompt = (
-            "Generate a concise, informative title of 5 words or less for these notes. "
+            f"Generate a concise, informative title of 5 words or less for these notes. "
+            f"Write the title in {self.language_output}. "
             "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
             + summary[:1000]
         )
@@ -197,7 +198,8 @@ class OllamaSummarizer(BaseSummarizer):
 
     async def generate_title(self, summary: str) -> str:
         prompt = (
-            "Generate a concise, informative title of 5 words or less for these notes. "
+            f"Generate a concise, informative title of 5 words or less for these notes. "
+            f"Write the title in {self.language_output}. "
             "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
             + summary[:1000]
         )
