@@ -84,6 +84,20 @@ def list_audio_devices() -> None:
 
 def _launch(config: AppConfig) -> None:
     """Start UI first, then start pipeline after config confirmed."""
+    # Pre-start the multiprocessing resource tracker before Textual opens
+    # asyncio/kqueue file descriptors. tqdm (used by huggingface_hub during
+    # model download) creates a multiprocessing.RLock, which triggers
+    # resource_tracker to spawn a subprocess via spawnv_passfds. If Textual's
+    # non-inheritable kqueue fds are already open at that point, the spawn
+    # fails with "bad value(s) in fds_to_keep". Initialising here ensures the
+    # tracker is already running before those fds exist.
+    try:
+        import multiprocessing
+        _dummy_lock = multiprocessing.RLock()
+        del _dummy_lock
+    except Exception:
+        pass
+
     from .app import NoteAssistantApp
     from .ui import NoteAssistantUI
 
