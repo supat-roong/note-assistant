@@ -18,14 +18,14 @@ Live audio transcription + summarization → Apple Notes. Launched from a Deskto
 |---|---|---|---|
 | Full | 26+ | Apple Silicon (M1+) | Apple Speech + Apple Foundation Models |
 | Partial | 13–25 | Any | Apple Speech + Ollama |
-| Fallback | 10.15+ | Any | faster-whisper + Ollama |
+| Fallback | < 13 | Any | faster-whisper + Ollama |
 
 MLX (`summarization.backend: mlx`) can be used as an alternative on-device summarizer on Apple Silicon at any supported macOS version.
 
 ## Quick Start
 
 ```bash
-bash setup_mac.sh
+bash scripts/setup_mac.sh
 ```
 
 The script will:
@@ -34,6 +34,14 @@ The script will:
 3. Install `uv` and all Python dependencies
 4. Install BlackHole (system audio capture)
 5. Build `NoteAssistant.app` and place it on your Desktop
+
+## Rebuild the App
+
+To rebuild `NoteAssistant.app` after changing the project directory or config:
+
+```bash
+bash scripts/build_app.sh
+```
 
 ## Manual Usage
 
@@ -103,7 +111,7 @@ Logs are written to `note_assistant.log` in the current directory.
 
 ## System Audio Setup (BlackHole)
 
-1. Run `setup_mac.sh` (installs BlackHole automatically)
+1. Run `scripts/setup_mac.sh` (installs BlackHole automatically)
 2. Open **Audio MIDI Setup** (Spotlight → "Audio MIDI Setup")
 3. Click **+** → **Create Aggregate Device**
 4. Check **BlackHole 2ch** + your microphone
@@ -114,5 +122,6 @@ Logs are written to `note_assistant.log` in the current directory.
 
 | Key | Action |
 |---|---|
-| `Ctrl+C` | Quit and save notes |
+| `Ctrl+Q` | Quit and save notes |
 | `Ctrl+P` | Pause / Resume |
+| `⏹ Stop` button | Stop recording (also shows elapsed time) |
