@@ -1,3 +1,4 @@
+import asyncio
 import time
 import numpy as np
 import pytest
@@ -5,8 +6,8 @@ from note_assistant.summarizer import BaseSummarizer
 
 
 class SlowSummarizer(BaseSummarizer):
-    def summarize(self, transcript: str):
-        time.sleep(0.2)
+    async def summarize(self, transcript: str):
+        await asyncio.sleep(0.2)
         yield "done"
 
 

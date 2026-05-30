@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import platform
-import subprocess
 from abc import ABC, abstractmethod
-from typing import Any, Iterator
+from typing import Any, AsyncIterator
 
 from .config import SummarizationConfig
 from note_assistant import logger
@@ -16,104 +15,33 @@ from note_assistant import logger
 
 class BaseSummarizer(ABC):
     @abstractmethod
-    def summarize(self, transcript: str) -> Iterator[str]:
+    async def summarize(self, transcript: str) -> AsyncIterator[str]:
         """Yield streaming summary tokens for the given transcript."""
-        yield from ()
+        return
+        yield  # pragma: no cover — marks this as an async generator
 
 
 # ---------------------------------------------------------------------------
-# Apple Foundation Models backend
-# Requires macOS 26+ SDK (Xcode 26). Uses FoundationModels framework.
-# Falls back automatically when SDK is unavailable.
+# Apple Foundation Models backend — placeholder (Task 3 will replace this)
 # ---------------------------------------------------------------------------
-
-# macOS 26+ renamed Intelligence → FoundationModels
-FOUNDATION_MODEL_SWIFT = """
-import Foundation
-import FoundationModels
-
-guard #available(macOS 26.0, *) else {
-    print("ERROR: FoundationModels requires macOS 26.0+")
-    exit(1)
-}
-
-let prompt = CommandLine.arguments.dropFirst().joined(separator: " ")
-
-let model = SystemLanguageModel.default
-guard model.availability == .available else {
-    print("ERROR: Apple Intelligence not available/enabled on this device")
-    exit(1)
-}
-
-let session = LanguageModelSession()
-Task {
-    do {
-        let stream = session.streamResponse(to: prompt)
-        for try await token in stream {
-            print(token, terminator: "")
-            fflush(stdout)
-        }
-        exit(0)
-    } catch {
-        print("ERROR: \\(error.localizedDescription)")
-        exit(1)
-    }
-}
-RunLoop.main.run(until: .distantFuture)
-"""
-
 
 class AppleFoundationSummarizer(BaseSummarizer):
-    """Uses Apple Foundation Models via a compiled Swift helper (requires Xcode 26 SDK)."""
+    """Placeholder — replaced in Task 3 with apple_fm_sdk implementation."""
 
-    def __init__(self, config: SummarizationConfig, language_input: str = "English", language_output: str = "English"):
-        self.config = config
-        self.language_input = language_input
-        self.language_output = language_output
-        self._helper_path = self._ensure_helper()
-
-    def _ensure_helper(self) -> str:
-        from pathlib import Path
-
-        helper_dir = Path.home() / ".note-assistant"
-        helper_dir.mkdir(exist_ok=True)
-        helper_path = helper_dir / "foundation_model_bridge"
-        swift_src = helper_dir / "foundation_model_bridge.swift"
-
-        if not helper_path.exists():
-            swift_src.write_text(FOUNDATION_MODEL_SWIFT)
-            result = subprocess.run(
-                ["swiftc", str(swift_src), "-o", str(helper_path)],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(
-                    "FoundationModels Swift bridge failed to compile — "
-                    "requires Xcode 26 SDK (macOS 26+). "
-                    "Install Xcode from the App Store to enable on-device Apple AI."
-                )
-        return str(helper_path)
-
-    def summarize(self, transcript: str) -> Iterator[str]:
-        prompt = self.config.prompt_template.format(transcript=transcript)
-        if self.language_input != self.language_output:
-            prompt += (
-                f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
-                f"Please translate the resulting summary into {self.language_output}."
-            )
-
-        proc = subprocess.Popen(
-            [self._helper_path, prompt],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            bufsize=1,
+    def __init__(
+        self,
+        config: SummarizationConfig,
+        language_input: str = "English",
+        language_output: str = "English",
+    ) -> None:
+        raise RuntimeError(
+            "Apple Foundation Models backend not yet configured. "
+            "Complete Task 3 of the migration plan."
         )
-        if proc.stdout:
-            for line in proc.stdout:
-                yield line
-        proc.wait()
+
+    async def summarize(self, transcript: str) -> AsyncIterator[str]:
+        raise RuntimeError("Not implemented")
+        yield  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +73,7 @@ class MLXSummarizer(BaseSummarizer):
         logger.info("Loading MLX model: %s (first run downloads ~2 GB)", model_name)
         self._model, self._tokenizer = load(model_name)
 
-    def summarize(self, transcript: str) -> Iterator[str]:
+    async def summarize(self, transcript: str) -> AsyncIterator[str]:
         from mlx_lm import stream_generate
 
         prompt = self.config.prompt_template.format(transcript=transcript)
@@ -161,9 +89,8 @@ class MLXSummarizer(BaseSummarizer):
         )
 
         for response in stream_generate(self._model, self._tokenizer, formatted, max_tokens=512):
-            token = response.text
-            if token:
-                yield token
+            if response.text:
+                yield response.text
 
 
 # ---------------------------------------------------------------------------
@@ -183,13 +110,13 @@ class OllamaSummarizer(BaseSummarizer):
     def _load(self) -> None:
         try:
             import ollama
-            self._ollama = ollama.Client(host=self.config.ollama_host)
+            self._ollama = ollama.AsyncClient(host=self.config.ollama_host)
         except ImportError as e:
             raise RuntimeError(
                 "ollama package not installed. Run: uv pip install ollama"
             ) from e
 
-    def summarize(self, transcript: str) -> Iterator[str]:
+    async def summarize(self, transcript: str) -> AsyncIterator[str]:
         prompt = self.config.prompt_template.format(transcript=transcript)
         if self.language_input != self.language_output:
             prompt += (
@@ -197,12 +124,12 @@ class OllamaSummarizer(BaseSummarizer):
                 f"Please translate the resulting summary into {self.language_output}."
             )
 
-        stream = self._ollama.chat(
+        stream = await self._ollama.chat(
             model=self.config.ollama_model,
             messages=[{"role": "user", "content": prompt}],
             stream=True,
         )
-        for chunk in stream:
+        async for chunk in stream:
             token = chunk["message"]["content"]
             if token:
                 yield token

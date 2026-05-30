@@ -29,7 +29,7 @@ class FailingTranscriber(BaseTranscriber):
 
 
 class MockSummarizer(BaseSummarizer):
-    def summarize(self, transcript: str):
+    async def summarize(self, transcript: str):
         yield "summary"
 
 

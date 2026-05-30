@@ -1,6 +1,6 @@
 import platform
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from note_assistant.summarizer import OllamaSummarizer, create_summarizer, _REGISTRY
 from note_assistant.config import SummarizationConfig
 
@@ -30,28 +30,37 @@ def test_create_summarizer_does_not_mutate_config():
     assert cfg.backend == original_backend
 
 
-def test_ollama_summarizer_streams_tokens():
+async def test_ollama_summarizer_streams_tokens():
     with patch.object(OllamaSummarizer, "_load"):
         cfg = SummarizationConfig(backend="ollama", ollama_model="llama3.2:3b")
         s = OllamaSummarizer(cfg, "English", "English")
-        s._ollama = type("FakeOllama", (), {
-            "chat": lambda self, **kw: [
-                {"message": {"content": "bullet"}},
-                {"message": {"content": " one"}},
-            ]
-        })()
-        result = "".join(s.summarize("some transcript"))
+
+        async def fake_stream():
+            for content in ["bullet", " one"]:
+                yield {"message": {"content": content}}
+
+        s._ollama = MagicMock()
+        s._ollama.chat = AsyncMock(return_value=fake_stream())
+        result = "".join([t async for t in s.summarize("some transcript")])
         assert result == "bullet one"
 
 
-def test_ollama_summarizer_translation_appends_instruction():
+async def test_ollama_summarizer_translation_appends_instruction():
     with patch.object(OllamaSummarizer, "_load"):
         cfg = SummarizationConfig(backend="ollama")
         s = OllamaSummarizer(cfg, "English", "Thai")
         prompts = []
-        def fake_chat(model, messages, stream, **kwargs):
-            prompts.append(messages[0]["content"])
-            return []
-        s._ollama = type("FO", (), {"chat": staticmethod(fake_chat)})()
-        list(s.summarize("hello"))
+
+        async def fake_stream():
+            return
+            yield  # empty async generator
+
+        async def fake_chat(**kwargs):
+            prompts.append(kwargs["messages"][0]["content"])
+            return fake_stream()
+
+        s._ollama = MagicMock()
+        s._ollama.chat = fake_chat
+        async for _ in s.summarize("hello"):
+            pass
         assert "Thai" in prompts[0]

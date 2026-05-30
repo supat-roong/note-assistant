@@ -1,6 +1,7 @@
 """Main orchestrator — ties audio, transcription, summarization, notes together."""
 from __future__ import annotations
 
+import asyncio
 import queue
 import threading
 from datetime import datetime
@@ -63,15 +64,18 @@ class SummarizationWorker(threading.Thread):
             if self._paused_event.is_set():
                 continue
             try:
-                tokens: list[str] = []
-                for token in self._summarizer.summarize(window):
-                    tokens.append(token)
-                    self._on_summary_token(token)
-                if tokens:
-                    self._on_summary_complete("".join(tokens))
+                asyncio.run(self._process_async(window))
             except Exception as e:
                 logger.error("Summarization error: %s", e)
                 error_bus.emit("summarizer", str(e))
+
+    async def _process_async(self, window: str) -> None:
+        tokens: list[str] = []
+        async for token in self._summarizer.summarize(window):
+            tokens.append(token)
+            self._on_summary_token(token)
+        if tokens:
+            self._on_summary_complete("".join(tokens))
 
 
 class NoteAssistantApp:
