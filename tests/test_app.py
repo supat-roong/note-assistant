@@ -20,7 +20,7 @@ from note_assistant.app import SummarizationWorker
 
 def test_worker_enqueue_is_non_blocking():
     worker = SummarizationWorker(
-        SlowSummarizer(),
+        [SlowSummarizer()],
         on_summary_token=lambda t: None,
         on_summary_complete=lambda s: None,
     )
@@ -38,7 +38,7 @@ def test_worker_processes_enqueued_window():
     results = []
     from conftest import MockSummarizer
     worker = SummarizationWorker(
-        MockSummarizer(),
+        [MockSummarizer()],
         on_summary_token=lambda t: None,
         on_summary_complete=results.append,
     )
@@ -52,7 +52,7 @@ def test_worker_processes_enqueued_window():
 def test_worker_stops_via_sentinel():
     from conftest import MockSummarizer
     worker = SummarizationWorker(
-        MockSummarizer(),
+        [MockSummarizer()],
         on_summary_token=lambda t: None,
         on_summary_complete=lambda s: None,
     )
@@ -69,7 +69,7 @@ def test_worker_drops_oldest_when_queue_full():
     error_bus.subscribe(lambda s, m, sev: warnings.append(sev) if sev == "warning" else None)
 
     worker = SummarizationWorker(
-        MockSummarizer(),
+        [MockSummarizer()],
         on_summary_token=lambda t: None,
         on_summary_complete=lambda s: None,
     )
@@ -85,7 +85,7 @@ def test_worker_pauses_and_discards_windows():
     from conftest import MockSummarizer
     processed = []
     worker = SummarizationWorker(
-        MockSummarizer(),
+        [MockSummarizer()],
         on_summary_token=lambda t: None,
         on_summary_complete=processed.append,
     )

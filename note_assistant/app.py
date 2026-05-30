@@ -19,6 +19,19 @@ from .summarizer import BaseSummarizer, create_summarizer
 from .transcriber import BaseTranscriber, create_transcriber
 
 
+def _is_repetitive(text: str, fragment_len: int = 30, max_count: int = 2) -> bool:
+    """Return True if any substring of fragment_len chars appears more than max_count times."""
+    if len(text) < fragment_len * (max_count + 1):
+        return False
+    seen: dict[str, int] = {}
+    for i in range(len(text) - fragment_len):
+        frag = text[i : i + fragment_len]
+        seen[frag] = seen.get(frag, 0) + 1
+        if seen[frag] > max_count:
+            return True
+    return False
+
+
 class SummarizationWorker(threading.Thread):
     """Consumes transcript windows from a queue and summarizes them asynchronously."""
 
@@ -26,13 +39,13 @@ class SummarizationWorker(threading.Thread):
 
     def __init__(
         self,
-        summarizer: BaseSummarizer,
+        summarizers: "list[BaseSummarizer]",
         on_summary_token: Callable[[str], None],
         on_summary_complete: Callable[[str], None],
         on_summary_start: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(daemon=True)
-        self._summarizer = summarizer
+        self._summarizers = summarizers
         self._on_summary_token = on_summary_token
         self._on_summary_complete = on_summary_complete
         self._on_summary_start = on_summary_start or (lambda: None)
@@ -82,13 +95,26 @@ class SummarizationWorker(threading.Thread):
             loop.close()
 
     async def _process_async(self, window: str) -> None:
-        last = ""
-        async for chunk in self._summarizer.summarize(window):
-            if not last:
-                self._on_summary_start()
-            last = chunk
-            self._on_summary_token(chunk)  # cumulative — UI must replace, not append
-        if last:
+        for idx, summarizer in enumerate(self._summarizers):
+            last = ""
+            try:
+                async for chunk in summarizer.summarize(window):
+                    if not last:
+                        self._on_summary_start()
+                    last = chunk
+                    self._on_summary_token(chunk)
+            except Exception as e:
+                logger.error("Summarization error (backend %d): %s", idx, e)
+                error_bus.emit("summarizer", str(e))
+                last = ""
+
+            if last and not _is_repetitive(last):
+                self._on_summary_complete(last)
+                return
+            if last:
+                logger.warning("Repetitive summary from backend %d, trying fallback", idx)
+
+        if last:  # all backends repetitive — use last result anyway
             self._on_summary_complete(last)
 
 
@@ -132,8 +158,25 @@ class NoteAssistantApp:
         self._chunk_count = 0
         self._start_time: datetime | None = None
 
+        summarizers = [self._summarizer]
+        if summarizer is None:
+            for backend in ("mlx", "ollama", "apple"):
+                if backend == config.summarization.backend:
+                    continue
+                try:
+                    fb_cfg = config.summarization.model_copy(update={"backend": backend})
+                    summarizers.append(create_summarizer(
+                        fb_cfg,
+                        language_input=config.language_input,
+                        language_output=config.language_output,
+                    ))
+                    logger.debug("Registered fallback summarizer: %s", backend)
+                    break
+                except Exception:
+                    pass
+
         self._worker = SummarizationWorker(
-            self._summarizer,
+            summarizers,
             on_summary_token=self.on_summary,
             on_summary_complete=self._on_summary_complete,
             on_summary_start=self.on_summary_start,
@@ -235,16 +278,8 @@ class NoteAssistantApp:
             self._notes.append_transcript(text)
 
         if self._chunk_count % self.config.summarization.summarize_every == 0:
-            new_window = " ".join(self._since_last_summary)
             self._since_last_summary = []
-            if self._full_summary:
-                window = (
-                    f"[Previous notes]\n{self._full_summary}\n\n"
-                    f"[New transcript]\n{new_window}"
-                )
-            else:
-                window = new_window
-            self._worker.enqueue(window)
+            self._worker.enqueue(" ".join(self._full_transcript))
 
     def _on_summary_complete(self, summary: str) -> None:
         self._full_summary = summary
