@@ -99,7 +99,7 @@ def _launch(config: AppConfig) -> None:
         def on_summary(token: str) -> None:
             ui.call_from_thread(ui.push_summary_token, token)
 
-def on_chunk() -> None:
+        def on_chunk() -> None:
             ui.call_from_thread(ui.on_audio_chunk)
 
         def on_error(source: str, message: str, severity: str) -> None:
@@ -113,7 +113,7 @@ def on_chunk() -> None:
                 updated_config,
                 on_transcript=on_transcript,
                 on_summary=on_summary,
-on_chunk=on_chunk,
+                on_chunk=on_chunk,
                 on_error=on_error,
                 on_progress=on_progress,
             )
