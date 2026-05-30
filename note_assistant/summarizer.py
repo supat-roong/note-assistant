@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import platform
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator
+from typing import Any, AsyncGenerator, AsyncIterator
 
 from .config import SummarizationConfig
 from note_assistant import logger
@@ -15,7 +15,7 @@ from note_assistant import logger
 
 class BaseSummarizer(ABC):
     @abstractmethod
-    async def summarize(self, transcript: str) -> AsyncIterator[str]:
+    async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         """Yield streaming summary tokens for the given transcript."""
         return
         yield  # pragma: no cover — marks this as an async generator
@@ -39,7 +39,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
             "Complete Task 3 of the migration plan."
         )
 
-    async def summarize(self, transcript: str) -> AsyncIterator[str]:
+    async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         raise RuntimeError("Not implemented")
         yield  # pragma: no cover
 
@@ -73,7 +73,7 @@ class MLXSummarizer(BaseSummarizer):
         logger.info("Loading MLX model: %s (first run downloads ~2 GB)", model_name)
         self._model, self._tokenizer = load(model_name)
 
-    async def summarize(self, transcript: str) -> AsyncIterator[str]:
+    async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         from mlx_lm import stream_generate
 
         prompt = self.config.prompt_template.format(transcript=transcript)
@@ -116,7 +116,7 @@ class OllamaSummarizer(BaseSummarizer):
                 "ollama package not installed. Run: uv pip install ollama"
             ) from e
 
-    async def summarize(self, transcript: str) -> AsyncIterator[str]:
+    async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         prompt = self.config.prompt_template.format(transcript=transcript)
         if self.language_input != self.language_output:
             prompt += (

@@ -40,7 +40,7 @@ async def test_ollama_summarizer_streams_tokens():
                 yield {"message": {"content": content}}
 
         s._ollama = MagicMock()
-        s._ollama.chat = AsyncMock(return_value=fake_stream())
+        s._ollama.chat = AsyncMock(side_effect=lambda **kw: fake_stream())
         result = "".join([t async for t in s.summarize("some transcript")])
         assert result == "bullet one"
 
