@@ -12,7 +12,8 @@ unset PYTHONHOME
 unset PYTHONPATH
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -132,6 +133,7 @@ uv venv .venv --python cpython-3.12.9-macos-aarch64-none
 
 info "Installing Python dependencies (tier: $TIER_NAME)..."
 uv pip install -e "."
+uv pip install pillow
 
 # Install extra backends if needed
 if [ "$TRANSCRIPTION_BACKEND" = "faster-whisper" ] || [ "$SUMMARIZATION_BACKEND" = "ollama" ]; then
@@ -175,7 +177,6 @@ fi
 # =============================================================================
 info "Building NoteAssistant.app..."
 bash "$SCRIPT_DIR/build_app.sh"
-
 # =============================================================================
 # Done
 # =============================================================================
