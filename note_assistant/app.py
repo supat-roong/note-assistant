@@ -148,6 +148,7 @@ class SummarizationWorker(threading.Thread):
                     logger.info("Skipping backend %d: ~%d tokens = %.0f%% of %d-token limit", idx, est_tokens, pct * 100, limit)
                     continue
             last = ""
+            counted_failure = False
             try:
                 async for chunk in summarizer.summarize(window):
                     if not last:
@@ -156,10 +157,16 @@ class SummarizationWorker(threading.Thread):
                     self._on_summary_token(chunk)
             except Exception as e:
                 self._consec_failures[idx] += 1
+                counted_failure = True
                 has_fallback = idx + 1 < len(self._summarizers)
                 logger.error("Summarization error (backend %d): %s", idx, e)
                 error_bus.emit("summarizer", str(e), "warning" if has_fallback else "error")
                 last = ""
+            if not last and not counted_failure:
+                self._consec_failures[idx] += 1
+                has_fallback = idx + 1 < len(self._summarizers)
+                logger.warning("Empty response from backend %d (silent failure)", idx)
+                error_bus.emit("summarizer", f"Backend {idx} returned empty response", "warning" if has_fallback else "error")
 
             if last and not _is_repetitive(last):
                 self._consec_failures[idx] = 0
