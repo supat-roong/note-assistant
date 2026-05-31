@@ -115,7 +115,10 @@ class BaseSummarizer(ABC):
         """Pre-load model into memory so the first summarize() call is fast."""
 
     def close(self) -> None:
-        """Release any resources held by this summarizer. No-op by default."""
+        """Release model from memory (weights, server-side model cache, etc.). No-op by default."""
+
+    def shutdown(self) -> None:
+        """Terminate any owned server processes. Called once at app exit. No-op by default."""
 
     @property
     def model_label(self) -> str:
@@ -338,7 +341,22 @@ class OllamaSummarizer(BaseSummarizer):
         logger.warning("Ollama server did not become reachable within 10 seconds")
 
     def close(self) -> None:
-        """Terminate the Ollama process if we started it."""
+        """Unload this model from the Ollama server's memory (keep_alive=0)."""
+        try:
+            import urllib.request, json as _json
+            req = urllib.request.Request(
+                f"{self.config.ollama_host}/api/generate",
+                data=_json.dumps({"model": self._model_name, "keep_alive": 0}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+            logger.info("Unloaded Ollama model from server memory: %s", self._model_name)
+        except Exception as e:
+            logger.debug("Could not unload Ollama model %s: %s", self._model_name, e)
+
+    def shutdown(self) -> None:
+        """Terminate the Ollama server process if we started it."""
         if self._owned_process is None:
             return
         self._owned_process.terminate()

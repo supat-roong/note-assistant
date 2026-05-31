@@ -452,6 +452,11 @@ class NoteAssistantApp:
                 s.close()
             except Exception as e:
                 logger.warning("Error closing summarizer %s: %s", s, e)
+        for s in self._worker._summarizers:
+            try:
+                s.shutdown()
+            except Exception as e:
+                logger.warning("Error shutting down summarizer %s: %s", s, e)
 
         cfg = self.config.output
         if not (cfg.save_transcript or cfg.save_summary):
