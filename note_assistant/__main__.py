@@ -168,7 +168,7 @@ def _launch(config: AppConfig) -> None:
             pipeline_thread.join(timeout=30)
 
     if getattr(ui, "return_code", None) == 99:
-        os.kill(os.getppid(), signal.SIGTERM)
+        os.kill(os.getppid(), signal.SIGHUP)
 
 
 if __name__ == "__main__":

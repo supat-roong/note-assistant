@@ -203,7 +203,7 @@ def test_launch_kills_parent_on_return_code_99():
          patch("os.getppid", return_value=12345):
         _launch(cfg)
 
-    assert (12345, signal.SIGTERM) in kill_calls
+    assert (12345, signal.SIGHUP) in kill_calls
 
 
 def test_launch_does_not_kill_parent_on_normal_exit():
