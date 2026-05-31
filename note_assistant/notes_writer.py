@@ -82,29 +82,14 @@ class NotesWriter:
             activate
             show note id "{self._note_id}"
         end tell
-        delay 0.5
-        -- Click note body to focus it for editing
+        delay 1.5
+        -- Open Attach File dialog (note is focused after show)
         tell application "System Events"
             tell process "Notes"
-                set w to window 1
-                set winPos to position of w
-                set winSize to size of w
-                click at {{(item 1 of winPos) + round((item 1 of winSize) * 0.65), (item 2 of winPos) + round((item 2 of winSize) * 0.4)}}
+                click menu item "Attach File…" of menu "Edit" of menu bar 1
             end tell
         end tell
-        delay 0.3
-        -- Go to end of note so attachment lands after all content
-        tell application "System Events"
-            key code 119 using command down
-        end tell
-        delay 0.2
-        -- Open Attach File dialog
-        tell application "System Events"
-            tell process "Notes"
-                click menu item "Attach File\\u2026" of menu "Edit" of menu bar 1
-            end tell
-        end tell
-        delay 1.0
+        delay 1.5
         -- Navigate to file via Go to Folder (Cmd+Shift+G)
         tell application "System Events"
             keystroke "g" using {{command down, shift down}}
