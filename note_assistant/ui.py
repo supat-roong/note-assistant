@@ -167,6 +167,7 @@ class NoteAssistantUI(App):
         self._chunk_count = 0
         self._last_chunk_at: Optional[datetime] = None
         self._pipeline = None
+        self._summary_buf = ""
 
     def set_pipeline(self, app) -> None:
         self._pipeline = app
@@ -400,10 +401,14 @@ class NoteAssistantUI(App):
         self._update_status_bar()
 
     def push_summary_start(self) -> None:
+        self._summary_buf = ""
         self.query_one("#summary-log", RichLog).clear()
 
     def push_summary_token(self, text: str) -> None:
-        self.query_one("#summary-log", RichLog).write(text, scroll_end=True)
+        self._summary_buf += text
+        log = self.query_one("#summary-log", RichLog)
+        log.clear()
+        log.write(self._summary_buf, scroll_end=True)
 
     def push_error(self, source: str, message: str, severity: str = "error") -> None:
         self.notify(f"[{source}] {message}", severity=severity)
