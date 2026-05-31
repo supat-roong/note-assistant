@@ -339,6 +339,7 @@ async def test_start_button_reads_save_recording_switch_off(ui_config):
         btn = pilot.app.query_one("#start-btn", Button)
         pilot.app.post_message(Button.Pressed(btn))
         await pilot.pause()
+        assert len(received) == 1
         assert received[0].output.save_recording is False
 
 
