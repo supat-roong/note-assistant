@@ -322,12 +322,17 @@ class NoteAssistantUI(App):
 
     def _update_transcription_for_lang(self, lang: str) -> None:
         t_backend = self.query_one("#t-backend", Select)
+        whisper_options = []
+        if platform.machine() == "arm64":
+            whisper_options.append(("Whisper (MLX)", "mlx-whisper"))
+        whisper_options.append(("Whisper (CPU)", "faster-whisper"))
         if lang == "Auto":
-            # Apple Speech requires a fixed locale — switch away from it.
-            # Both Whisper backends support auto-detect; leave dropdown enabled
-            # so the user can choose between MLX and CPU.
+            # Apple Speech requires a fixed locale — remove it from the dropdown.
+            t_backend.set_options(whisper_options)
             if t_backend.value == "apple":
                 t_backend.value = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
+        else:
+            t_backend.set_options([("Apple Speech", "apple")] + whisper_options)
 
     def _update_file_input_visibility(self, source: str) -> None:
         row = self.query_one("#file-path-row")
