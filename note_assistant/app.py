@@ -156,6 +156,12 @@ class SummarizationWorker(threading.Thread):
             if last and not _is_repetitive(last):
                 self._consec_failures[idx] = 0
                 self._last_active_idx = idx
+                elapsed = time.monotonic() - _t0
+                if self._avg_sum_seconds is None:
+                    self._avg_sum_seconds = elapsed
+                else:
+                    self._avg_sum_seconds = _EWMA_ALPHA * elapsed + (1 - _EWMA_ALPHA) * self._avg_sum_seconds
+                logger.debug("Summarization took %.1fs (EWMA %.1fs)", elapsed, self._avg_sum_seconds)
                 self._on_summary_complete(last)
                 return
             if last:
@@ -163,13 +169,6 @@ class SummarizationWorker(threading.Thread):
 
         if last:  # all backends repetitive — use last result anyway
             self._on_summary_complete(last)
-
-        elapsed = time.monotonic() - _t0
-        if self._avg_sum_seconds is None:
-            self._avg_sum_seconds = elapsed
-        else:
-            self._avg_sum_seconds = _EWMA_ALPHA * elapsed + (1 - _EWMA_ALPHA) * self._avg_sum_seconds
-        logger.debug("Summarization took %.1fs (EWMA %.1fs)", elapsed, self._avg_sum_seconds)
 
 
 class NoteAssistantApp:
