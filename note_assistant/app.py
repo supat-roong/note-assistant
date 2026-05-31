@@ -454,7 +454,11 @@ class NoteAssistantApp:
                 first = self._full_summary.split("\n")[0].strip().lstrip("- ").lstrip("* ")
                 title = " ".join(first.split()[:6])
             if title:
-                self._notes.set_title(f"{title} — {self._notes._date_str} #Note Assistant")
+                new_title = f"{title} — {self._notes._date_str} #Note Assistant"
+                if self._recorder:
+                    self._notes._title = new_title  # defer flush; finalize_session will write it
+                else:
+                    self._notes.set_title(new_title)
 
         # Reset note to title-only before encoding so user sees clean state while ffmpeg runs
         if self._notes and self._recorder:

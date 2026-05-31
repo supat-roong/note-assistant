@@ -434,3 +434,26 @@ def test_shutdown_file_source_attaches_source_file_when_save_recording(tmp_path)
 
     app = NoteAssistantApp(cfg, transcriber=NullTranscriber(), summarizer=MockSummarizer())
     assert app._recorder is None  # file source never creates a recorder
+
+
+def test_shutdown_file_source_calls_attach_and_finalize_when_save_recording(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    from pathlib import Path
+    mock_config.audio.source = "file"
+    mock_config.audio.file_path = Path("/tmp/input.mp3")
+    mock_config.output.save_recording = True
+    mock_config.output.auto_title = False
+
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    assert app._recorder is None  # file source — no recorder created
+
+    mock_notes = MagicMock()
+    app._notes = mock_notes
+    app._worker = MagicMock()
+
+    app._shutdown()
+
+    mock_notes.write_title_only.assert_called_once()
+    mock_notes.attach_recording.assert_called_once_with(Path("/tmp/input.mp3"))
+    mock_notes.finalize_session.assert_called_once()
+    mock_notes.close_session.assert_not_called()
