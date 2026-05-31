@@ -114,6 +114,13 @@ class NoteAssistantUI(App):
         width: 1fr;
         content-align: left middle;
     }
+    #save-recording-row {
+        height: auto;
+    }
+    #save-recording-row Label {
+        width: 1fr;
+        content-align: left middle;
+    }
     #stop-row {
         height: auto;
         padding: 0 1;
@@ -250,6 +257,9 @@ class NoteAssistantUI(App):
                 with Horizontal(id="auto-title-row"):
                     yield Label("Auto-generate note title")
                     yield Switch(value=self._config.output.auto_title, id="auto-title")
+                with Horizontal(id="save-recording-row"):
+                    yield Label("Save session recording")
+                    yield Switch(value=self._config.output.save_recording, id="save-recording")
 
             yield Button("🚀 Start Processing", variant="success", id="start-btn")
 
@@ -381,6 +391,7 @@ class NoteAssistantUI(App):
             self._config.transcription.backend = chosen_backend
             self._config.summarization.backend = self.query_one("#s-backend", Select).value
             self._config.output.auto_title = self.query_one("#auto-title", Switch).value
+            self._config.output.save_recording = self.query_one("#save-recording", Switch).value
 
             self.query_one("#settings-view").display = False
             self.query_one("#recording-view").display = True

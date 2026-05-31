@@ -310,6 +310,38 @@ async def test_start_button_reads_auto_title_switch_on(ui_config):
         assert received[0].output.auto_title is True
 
 
+async def test_save_recording_switch_renders_with_default_off(ui_config):
+    async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 80)) as pilot:
+        from textual.widgets import Switch
+        switch = pilot.app.query_one("#save-recording", Switch)
+        assert switch.value is False
+
+
+async def test_start_button_reads_save_recording_switch_on(ui_config):
+    from textual.widgets import Switch
+    received = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=received.append).run_test(size=(120, 80)) as pilot:
+        pilot.app.query_one("#save-recording", Switch).value = True
+        await pilot.pause()
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert len(received) == 1
+        assert received[0].output.save_recording is True
+
+
+async def test_start_button_reads_save_recording_switch_off(ui_config):
+    from textual.widgets import Switch
+    received = []
+    async with NoteAssistantUI(ui_config, on_start_pipeline=received.append).run_test(size=(120, 80)) as pilot:
+        pilot.app.query_one("#save-recording", Switch).value = False
+        await pilot.pause()
+        btn = pilot.app.query_one("#start-btn", Button)
+        pilot.app.post_message(Button.Pressed(btn))
+        await pilot.pause()
+        assert received[0].output.save_recording is False
+
+
 async def test_done_view_hidden_by_default(ui_config):
     async with NoteAssistantUI(ui_config, on_start_pipeline=lambda c: None).run_test(size=(120, 70)) as pilot:
         assert not pilot.app.query_one("#done-view").display
