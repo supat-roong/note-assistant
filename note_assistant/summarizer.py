@@ -1,7 +1,9 @@
 """Summarization backend — Apple Foundation Models, MLX (on-device), or Ollama."""
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import pathlib
 import platform
 from abc import ABC, abstractmethod
@@ -9,6 +11,23 @@ from typing import Any, AsyncGenerator
 
 from .config import SummarizationConfig
 from note_assistant import logger
+
+
+@contextlib.contextmanager
+def _suppress_c_stderr():
+    """Redirect fd 2 to /dev/null briefly to silence C-level macOS malloc noise."""
+    try:
+        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+        saved_fd = os.dup(2)
+        os.dup2(devnull_fd, 2)
+        try:
+            yield
+        finally:
+            os.dup2(saved_fd, 2)
+            os.close(saved_fd)
+            os.close(devnull_fd)
+    except OSError:
+        yield
 
 
 def _mlx_context_length(model_name: str) -> int | None:
@@ -121,15 +140,16 @@ class AppleFoundationSummarizer(BaseSummarizer):
         self._check_availability()
 
     def _check_availability(self) -> None:
-        try:
-            import apple_fm_sdk as fm
-            self._fm = fm
-        except ImportError as e:
-            raise RuntimeError(
-                "apple-fm-sdk not installed. Run: uv add apple-fm-sdk"
-            ) from e
-        model = fm.SystemLanguageModel()
-        available, reason = model.is_available()
+        with _suppress_c_stderr():
+            try:
+                import apple_fm_sdk as fm
+                self._fm = fm
+            except ImportError as e:
+                raise RuntimeError(
+                    "apple-fm-sdk not installed. Run: uv add apple-fm-sdk"
+                ) from e
+            model = fm.SystemLanguageModel()
+            available, reason = model.is_available()
         if not available:
             raise RuntimeError(f"Apple Foundation Models not available: {reason}")
 

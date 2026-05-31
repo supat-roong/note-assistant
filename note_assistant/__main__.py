@@ -1,12 +1,30 @@
 """CLI entry point — `python -m note_assistant` or `note-assistant` command."""
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import sys
 import threading
 from pathlib import Path
 from typing import Annotated, Optional
+
+
+@contextlib.contextmanager
+def _suppress_c_stderr():
+    """Redirect fd 2 to /dev/null briefly to silence C-level macOS malloc noise."""
+    try:
+        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+        saved_fd = os.dup(2)
+        os.dup2(devnull_fd, 2)
+        try:
+            yield
+        finally:
+            os.dup2(saved_fd, 2)
+            os.close(saved_fd)
+            os.close(devnull_fd)
+    except OSError:
+        yield
 
 import typer
 
@@ -96,7 +114,8 @@ def _launch(config: AppConfig) -> None:
     # tracker is already running before those fds exist.
     try:
         import multiprocessing
-        _dummy_lock = multiprocessing.RLock()
+        with _suppress_c_stderr():
+            _dummy_lock = multiprocessing.RLock()
         del _dummy_lock
     except Exception:
         pass
