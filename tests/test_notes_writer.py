@@ -1,5 +1,6 @@
 import time
 import pytest
+from pathlib import Path
 from note_assistant.notes_writer import NotesWriter
 
 
@@ -79,3 +80,54 @@ def test_summary_to_html_no_p_or_heading_elements():
     assert "Point two" in html
     assert "Plain paragraph" in html
     assert "<li>" in html
+
+
+def test_write_title_only_resets_body_to_title_only(writer):
+    nw, calls = writer
+    nw._summary = "some summary"
+    nw._transcript_lines = ["some text"]
+    nw.write_title_only()
+    assert len(calls) == 1
+    assert "some summary" not in calls[0]
+    assert "some text" not in calls[0]
+    assert nw._title in calls[0] or "Test" in calls[0]
+
+
+def test_write_title_only_skips_when_note_not_created(monkeypatch):
+    calls = []
+    monkeypatch.setattr(NotesWriter, "_run_osascript", lambda self, s: calls.append(s) or "")
+    nw = NotesWriter("Test")
+    nw._note_created = False
+    nw.write_title_only()
+    assert calls == []
+
+
+def test_finalize_session_forces_flush_with_full_content(writer):
+    nw, calls = writer
+    nw._summary = "bullet point"
+    nw._transcript_lines = ["some text"]
+    nw._last_flush = time.monotonic()  # throttled
+    nw.finalize_session()
+    assert len(calls) == 1
+    assert "bullet point" in calls[0]
+    assert "some text" in calls[0]
+    assert "Session ended" in calls[0]
+
+
+def test_attach_recording_calls_osascript_with_path(writer, tmp_path):
+    nw, calls = writer
+    fake_m4a = tmp_path / "recording.m4a"
+    fake_m4a.touch()
+    nw.attach_recording(fake_m4a)
+    assert len(calls) == 1
+    assert "make new attachment" in calls[0]
+    assert str(fake_m4a) in calls[0]
+
+
+def test_attach_recording_skips_when_note_not_created(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(NotesWriter, "_run_osascript", lambda self, s: calls.append(s) or "")
+    nw = NotesWriter("Test")
+    nw._note_created = False
+    nw.attach_recording(tmp_path / "recording.m4a")
+    assert calls == []

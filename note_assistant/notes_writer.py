@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 import time
 from datetime import datetime
+from pathlib import Path
 
 
 class NotesWriter:
@@ -44,6 +45,37 @@ class NotesWriter:
     def close_session(self) -> None:
         self._closed = True
         self._flush(force=True)
+
+    def write_title_only(self) -> None:
+        """Reset note body to title heading only, before attaching a recording."""
+        if not self._note_created:
+            return
+        html = f'<div><b>{self._he(self._title)}</b></div><div><br></div>'
+        script = f"""
+        tell application "Notes"
+            set targetNote to note id "{self._note_id}"
+            set body of targetNote to "{self._as(html)}"
+        end tell
+        """
+        self._run_osascript(script)
+
+    def finalize_session(self) -> None:
+        """Write full note content (summary + transcript) and mark session ended."""
+        self._closed = True
+        self._flush(force=True)
+
+    def attach_recording(self, path: Path) -> None:
+        """Attach an audio file to the note (M4A from live recording or source file)."""
+        if not self._note_created:
+            return
+        script = f"""
+        tell application "Notes"
+            tell note id "{self._note_id}"
+                make new attachment with properties {{file name: POSIX file "{path}"}}
+            end tell
+        end tell
+        """
+        self._run_osascript(script)
 
     def _maybe_flush(self) -> None:
         self._flush()
