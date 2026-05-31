@@ -180,6 +180,7 @@ class SummarizationWorker(threading.Thread):
                 self._on_summary_complete(last)
                 return
             if last:
+                self._consec_failures[idx] += 1
                 logger.warning("Repetitive summary from backend %d, trying fallback", idx)
 
         if last:  # all backends repetitive — use last result anyway
