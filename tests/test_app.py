@@ -178,6 +178,26 @@ def test_shutdown_skips_title_when_auto_title_disabled(mock_config, mock_transcr
     mock_notes.close_session.assert_called_once()
 
 
+def test_shutdown_enqueues_final_summary_when_unsummarized_chunks_remain(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    app._full_transcript = ["chunk one", "chunk two"]
+    app._since_last_summary = ["chunk one", "chunk two"]
+    app._worker = MagicMock()
+    app._shutdown()
+    app._worker.enqueue.assert_called_once_with("chunk one chunk two")
+
+
+def test_shutdown_skips_final_enqueue_when_no_unsummarized_chunks(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    app._full_transcript = ["chunk one", "chunk two"]
+    app._since_last_summary = []
+    app._worker = MagicMock()
+    app._shutdown()
+    app._worker.enqueue.assert_not_called()
+
+
 def test_launch_closes_terminal_on_return_code_99():
     import os
     import signal

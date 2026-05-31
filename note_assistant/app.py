@@ -315,7 +315,6 @@ class NoteAssistantApp:
 
     def stop(self) -> None:
         self._running = False
-        self._worker.stop()
         self._audio.stop()
 
     # ------------------------------------------------------------------
@@ -384,6 +383,8 @@ class NoteAssistantApp:
         self.on_error(source, message, severity)
 
     def _shutdown(self) -> None:
+        if self._since_last_summary:
+            self._worker.enqueue(" ".join(self._full_transcript))
         self._worker.stop()
         self._worker.join(timeout=5)
         self._transcriber.close()
