@@ -55,4 +55,4 @@ output:
 
     {summary}
   save_recording: false        # record session audio to file (requires ffmpeg)
-  recording_dir: null          # null = same as output_dir; or set an explicit path e.g. ~/Recordings
+  recording_dir: null          # null = same as output_dir; or set an explicit absolute path

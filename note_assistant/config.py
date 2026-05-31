@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +59,13 @@ class OutputConfig(BaseModel):
     )
     save_recording: bool = False
     recording_dir: Optional[Path] = None
+
+    @field_validator("recording_dir", mode="before")
+    @classmethod
+    def _expand_recording_dir(cls, v):
+        if v is not None:
+            return Path(v).expanduser()
+        return v
 
 
 class AppConfig(BaseModel):
