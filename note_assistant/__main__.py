@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import sys
 import threading
 from pathlib import Path
@@ -169,14 +170,18 @@ def _launch(config: AppConfig) -> None:
 
     if getattr(ui, "return_code", None) == 99:
         import subprocess
-        # Close the Terminal.app window (launched via NoteAssistant.app osascript).
-        # Detach so the subprocess outlives the Python process.
+        # 1. Kill the parent shell with SIGKILL (can't be ignored) so the
+        #    launcher's "; exec bash" never runs — otherwise the terminal stays open.
+        # 2. Launch osascript detached to close the Terminal.app window after
+        #    Python exits. start_new_session puts it in its own process group so
+        #    it is unaffected by the parent-shell kill.
         subprocess.Popen(
             ["osascript", "-e", 'tell application "Terminal" to close front window'],
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        os.kill(os.getppid(), signal.SIGKILL)
         sys.exit(0)
 
 

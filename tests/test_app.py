@@ -179,7 +179,8 @@ def test_shutdown_skips_title_when_auto_title_disabled(mock_config, mock_transcr
 
 
 def test_launch_closes_terminal_on_return_code_99():
-    import sys
+    import os
+    import signal
     from unittest.mock import MagicMock, patch
     from note_assistant.__main__ import _launch
     from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
@@ -195,15 +196,19 @@ def test_launch_closes_terminal_on_return_code_99():
     mock_ui.return_code = 99
 
     popen_calls = []
+    kill_calls = []
 
     with patch("note_assistant.ui.NoteAssistantUI", return_value=mock_ui), \
          patch("note_assistant.app.NoteAssistantApp"), \
          patch("subprocess.Popen", side_effect=lambda *a, **kw: popen_calls.append(a[0])), \
+         patch("os.kill", side_effect=lambda pid, sig: kill_calls.append((pid, sig))), \
+         patch("os.getppid", return_value=12345), \
          patch("sys.exit"):
         _launch(cfg)
 
     assert any("osascript" in str(c) for c in popen_calls), "osascript not called"
     assert any("close front window" in str(c) for c in popen_calls)
+    assert (12345, signal.SIGKILL) in kill_calls
 
 
 def test_launch_does_not_close_terminal_on_normal_exit():
