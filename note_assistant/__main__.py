@@ -185,6 +185,22 @@ def _launch(config: AppConfig) -> None:
     def start_pipeline_async(updated_config: AppConfig) -> None:
         threading.Thread(target=start_pipeline, args=(updated_config,), daemon=True).start()
 
+    import subprocess
+
+    # Capture our terminal window ID before the UI takes over focus. The
+    # launcher activates Terminal immediately after opening the window, so the
+    # front window at this point is reliably ours.
+    _terminal_window_id: int | None = None
+    try:
+        _r = subprocess.run(
+            ["osascript", "-e", 'tell application "Terminal" to get id of front window'],
+            capture_output=True, text=True, timeout=3,
+        )
+        if _r.returncode == 0:
+            _terminal_window_id = int(_r.stdout.strip())
+    except Exception:
+        pass
+
     ui = NoteAssistantUI(config, on_start_pipeline=start_pipeline_async)
 
     try:
@@ -196,14 +212,20 @@ def _launch(config: AppConfig) -> None:
             pipeline_thread.join(timeout=30)
 
     if getattr(ui, "return_code", None) == 99:
-        import subprocess
         # 1. Kill the parent shell with SIGKILL (can't be ignored) so the
         #    launcher's "; exec bash" never runs — otherwise the terminal stays open.
-        # 2. Launch osascript detached to close the Terminal.app window after
-        #    Python exits. start_new_session puts it in its own process group so
-        #    it is unaffected by the parent-shell kill.
+        # 2. Launch osascript detached to close our specific Terminal window after
+        #    Python exits. Using the captured window ID avoids closing whichever
+        #    window happens to be front at quit time (may not be ours).
+        if _terminal_window_id is not None:
+            close_script = (
+                f'tell application "Terminal" to close '
+                f'(first window whose id is {_terminal_window_id})'
+            )
+        else:
+            close_script = 'tell application "Terminal" to close front window'
         subprocess.Popen(
-            ["osascript", "-e", 'tell application "Terminal" to close front window'],
+            ["osascript", "-e", close_script],
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
