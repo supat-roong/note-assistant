@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-import signal
+import sys
 import threading
 from pathlib import Path
 from typing import Annotated, Optional
@@ -168,7 +168,16 @@ def _launch(config: AppConfig) -> None:
             pipeline_thread.join(timeout=30)
 
     if getattr(ui, "return_code", None) == 99:
-        os.kill(os.getppid(), signal.SIGHUP)
+        import subprocess
+        # Close the Terminal.app window (launched via NoteAssistant.app osascript).
+        # Detach so the subprocess outlives the Python process.
+        subprocess.Popen(
+            ["osascript", "-e", 'tell application "Terminal" to close front window'],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        sys.exit(0)
 
 
 if __name__ == "__main__":
