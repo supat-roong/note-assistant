@@ -166,7 +166,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
             try:
                 session = self._fm.LanguageModelSession()
                 async for chunk in session.stream_response(prompt):
-                    result = chunk
+                    result += chunk
                 if result.strip():
                     return result.strip().strip('"').strip("'").rstrip(".")
             except Exception as e:

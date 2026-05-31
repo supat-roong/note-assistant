@@ -121,7 +121,7 @@ class SummarizationWorker(threading.Thread):
                 async for chunk in summarizer.summarize(window):
                     if not last:
                         self._on_summary_start()
-                    last = chunk
+                    last += chunk
                     self._on_summary_token(chunk)
             except Exception as e:
                 logger.error("Summarization error (backend %d): %s", idx, e)

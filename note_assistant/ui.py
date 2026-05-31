@@ -225,8 +225,14 @@ class NoteAssistantUI(App):
                         )
                     with Vertical():
                         yield Label("Summarization")
+                        mlx_short = self._config.summarization.mlx_model.split("/")[-1]
+                        ollama_model = self._config.summarization.ollama_model
                         yield Select(
-                            [("Apple Intelligence", "apple"), ("MLX (on-device)", "mlx"), ("Ollama", "ollama")],
+                            [
+                                ("Apple Intelligence", "apple"),
+                                (f"{mlx_short} (mlx)", "mlx"),
+                                (f"{ollama_model} (ollama)", "ollama"),
+                            ],
                             value=self._config.summarization.backend,
                             id="s-backend",
                         )
@@ -393,10 +399,11 @@ class NoteAssistantUI(App):
         self.query_one("#transcript-log", RichLog).write(text + " ")
         self._update_status_bar()
 
+    def push_summary_start(self) -> None:
+        self.query_one("#summary-log", RichLog).clear()
+
     def push_summary_token(self, text: str) -> None:
-        log = self.query_one("#summary-log", RichLog)
-        log.clear()
-        log.write(text, scroll_end=True)
+        self.query_one("#summary-log", RichLog).write(text, scroll_end=True)
 
     def push_error(self, source: str, message: str, severity: str = "error") -> None:
         self.notify(f"[{source}] {message}", severity=severity)
