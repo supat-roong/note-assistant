@@ -53,6 +53,8 @@ class StatusBar(Static):
 class NoteAssistantUI(App):
     """Main Textual application with multi-language and file source support."""
 
+    ENABLE_COMMAND_PALETTE = False
+
     BINDINGS = [
         Binding("ctrl+p", "toggle_pause", "Pause/Resume", priority=True),
         Binding("ctrl+q", "quit", "Quit"),
