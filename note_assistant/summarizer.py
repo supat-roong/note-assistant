@@ -94,6 +94,22 @@ def _ollama_context_length(model_name: str, host: str = "http://localhost:11434"
     return None
 
 
+def _language_instruction(language_input: str, language_output: str) -> str:
+    """Return the prompt suffix for cross-language summarization.
+
+    Handles the 'Auto' sentinel — when input language is unknown, we cannot
+    say 'The transcript is in Auto', so we only instruct on the output side.
+    """
+    if language_input == "Auto":
+        return f"\n\nIMPORTANT: Please write the resulting summary in {language_output}."
+    if language_input != language_output:
+        return (
+            f"\n\nIMPORTANT: The transcript is in {language_input}. "
+            f"Please translate the resulting summary into {language_output}."
+        )
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
@@ -168,11 +184,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         fm = self._fm
         prompt = self.config.prompt_template.format(transcript=transcript)
-        if self.language_input != self.language_output:
-            prompt += (
-                f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
-                f"Please translate the resulting summary into {self.language_output}."
-            )
+        prompt += _language_instruction(self.language_input, self.language_output)
         session = fm.LanguageModelSession()
         try:
             async for chunk in session.stream_response(prompt):
@@ -185,11 +197,7 @@ class AppleFoundationSummarizer(BaseSummarizer):
             overhead = len(prompt) - len(transcript)
             budget = max(0, 3000 - overhead)
             retry_prompt = self.config.prompt_template.format(transcript=transcript[-budget:])
-            if self.language_input != self.language_output:
-                retry_prompt += (
-                    f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
-                    f"Please translate the resulting summary into {self.language_output}."
-                )
+            retry_prompt += _language_instruction(self.language_input, self.language_output)
             retry_session = fm.LanguageModelSession()
             async for chunk in retry_session.stream_response(retry_prompt):
                 yield chunk
@@ -267,11 +275,7 @@ class MLXSummarizer(BaseSummarizer):
             self._load()
 
         prompt = self.config.prompt_template.format(transcript=transcript)
-        if self.language_input != self.language_output:
-            prompt += (
-                f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
-                f"Please translate the resulting summary into {self.language_output}."
-            )
+        prompt += _language_instruction(self.language_input, self.language_output)
 
         messages = [{"role": "user", "content": prompt}]
         try:
@@ -395,11 +399,7 @@ class OllamaSummarizer(BaseSummarizer):
 
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         prompt = self.config.prompt_template.format(transcript=transcript)
-        if self.language_input != self.language_output:
-            prompt += (
-                f"\n\nIMPORTANT: The transcript is in {self.language_input}. "
-                f"Please translate the resulting summary into {self.language_output}."
-            )
+        prompt += _language_instruction(self.language_input, self.language_output)
 
         stream = await self._ollama.chat(
             model=self._model_name,
