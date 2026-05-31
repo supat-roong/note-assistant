@@ -128,6 +128,9 @@ def _launch(config: AppConfig) -> None:
         def on_progress(current: int, total: int) -> None:
             ui.call_from_thread(ui.push_progress, current, total)
 
+        def on_backend_switch(model_label: str) -> None:
+            ui.call_from_thread(ui.push_backend_switch, model_label)
+
         if updated_config.transcription.backend == "faster-whisper":
             ui.call_from_thread(
                 ui.push_error,
@@ -151,6 +154,7 @@ def _launch(config: AppConfig) -> None:
                 on_chunk=on_chunk,
                 on_error=on_error,
                 on_progress=on_progress,
+                on_backend_switch=on_backend_switch,
             )
         except Exception as e:
             ui.call_from_thread(ui.push_error, "pipeline", str(e), "error")

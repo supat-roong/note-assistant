@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import queue
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -37,6 +39,9 @@ def _is_repetitive(text: str, fragment_len: int = 30, max_count: int = 4) -> boo
     return False
 
 
+_EWMA_ALPHA = 0.25  # weight for most-recent sample in exponential moving average
+
+
 class SummarizationWorker(threading.Thread):
     """Consumes transcript windows from a queue and summarizes them asynchronously."""
 
@@ -48,30 +53,40 @@ class SummarizationWorker(threading.Thread):
         on_summary_token: Callable[[str], None],
         on_summary_complete: Callable[[str], None],
         on_summary_start: Callable[[], None] | None = None,
+        on_backend_switch: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(daemon=True)
         self._summarizers = summarizers
         self._on_summary_token = on_summary_token
         self._on_summary_complete = on_summary_complete
         self._on_summary_start = on_summary_start or (lambda: None)
+        self._on_backend_switch = on_backend_switch or (lambda label: None)
         self._q: queue.Queue[str | None] = queue.Queue()
         self._paused_event = threading.Event()
         self._last_queue_warning = 0.0
         self._warmed: set[int] = set()
+        self._avg_sum_seconds: float | None = None
 
-    def enqueue(self, window: str) -> None:
-        import time
+    @property
+    def avg_summarization_seconds(self) -> float | None:
+        return self._avg_sum_seconds
+
+    def enqueue(self, window: str) -> bool:
+        """Enqueue a transcript window. Returns False if the queue was full and a window was dropped."""
+        dropped = False
         if self._q.qsize() >= self.MAX_QUEUE_DEPTH:
             try:
                 self._q.get_nowait()
             except queue.Empty:
                 pass
+            dropped = True
             logger.warning("summarization queue full — dropping window")
             now = time.monotonic()
             if now - self._last_queue_warning > 10.0:
                 self._last_queue_warning = now
                 error_bus.emit("summarizer", "Queue full — dropping oldest window", "warning")
         self._q.put(window)
+        return not dropped
 
     def pause(self) -> None:
         self._paused_event.set()
@@ -101,8 +116,11 @@ class SummarizationWorker(threading.Thread):
             loop.close()
 
     async def _process_async(self, window: str) -> None:
+        _t0 = time.monotonic()
         est_tokens = _estimate_tokens(window)
         for idx, summarizer in enumerate(self._summarizers):
+            if idx > 0:
+                self._on_backend_switch(summarizer.model_label)
             limit = summarizer.TOKEN_LIMIT
             if limit:
                 pct = est_tokens / limit
@@ -137,6 +155,13 @@ class SummarizationWorker(threading.Thread):
         if last:  # all backends repetitive — use last result anyway
             self._on_summary_complete(last)
 
+        elapsed = time.monotonic() - _t0
+        if self._avg_sum_seconds is None:
+            self._avg_sum_seconds = elapsed
+        else:
+            self._avg_sum_seconds = _EWMA_ALPHA * elapsed + (1 - _EWMA_ALPHA) * self._avg_sum_seconds
+        logger.debug("Summarization took %.1fs (EWMA %.1fs)", elapsed, self._avg_sum_seconds)
+
 
 class NoteAssistantApp:
     """Orchestrates the full pipeline: audio → transcribe → summarize → notes."""
@@ -150,6 +175,7 @@ class NoteAssistantApp:
         on_chunk: Callable[[], None] | None = None,
         on_error: Callable[[str, str, str], None] | None = None,
         on_progress: Callable[[int, int], None] | None = None,
+        on_backend_switch: Callable[[str], None] | None = None,
         transcriber: "BaseTranscriber | None" = None,
         summarizer: "BaseSummarizer | None" = None,
     ):
@@ -160,6 +186,7 @@ class NoteAssistantApp:
         self.on_chunk = on_chunk or (lambda: None)
         self.on_error = on_error or (lambda s, m, sev: None)
         self.on_progress = on_progress or (lambda cur, tot: None)
+        self.on_backend_switch = on_backend_switch or (lambda label: None)
 
         self._transcriber = transcriber or create_transcriber(config.transcription)
         self._summarizer = summarizer or create_summarizer(
@@ -177,6 +204,9 @@ class NoteAssistantApp:
         self._full_summary = ""
         self._chunk_count = 0
         self._start_time: datetime | None = None
+        self._effective_summarize_every = config.summarization.summarize_every
+        self._last_chunk_time: float | None = None
+        self._avg_chunk_seconds: float | None = None
 
         summarizers = [self._summarizer]
         if summarizer is None:
@@ -208,6 +238,7 @@ class NoteAssistantApp:
             on_summary_token=self.on_summary,
             on_summary_complete=self._on_summary_complete,
             on_summary_start=self.on_summary_start,
+            on_backend_switch=self.on_backend_switch,
         )
 
         error_bus.subscribe(self._route_error)
@@ -287,6 +318,16 @@ class NoteAssistantApp:
         if self._paused_event.is_set():
             return
 
+        # Track chunk arrival rate for adaptive interval estimation
+        now = time.monotonic()
+        if self._last_chunk_time is not None:
+            interval = now - self._last_chunk_time
+            if self._avg_chunk_seconds is None:
+                self._avg_chunk_seconds = interval
+            else:
+                self._avg_chunk_seconds = _EWMA_ALPHA * interval + (1 - _EWMA_ALPHA) * self._avg_chunk_seconds
+        self._last_chunk_time = now
+
         try:
             text = self._transcriber.transcribe(audio, self.config.audio.sample_rate)
         except Exception as e:
@@ -305,9 +346,26 @@ class NoteAssistantApp:
         if self._notes:
             self._notes.append_transcript(text)
 
-        if self._chunk_count % self.config.summarization.summarize_every == 0:
+        if self._chunk_count % self._effective_summarize_every == 0:
             self._since_last_summary = []
-            self._worker.enqueue(" ".join(self._full_transcript))
+            queued = self._worker.enqueue(" ".join(self._full_transcript))
+            base = self.config.summarization.summarize_every
+            avg_sum = self._worker.avg_summarization_seconds
+            avg_chunk = self._avg_chunk_seconds or self.config.audio.chunk_seconds
+            if avg_sum is not None:
+                n_needed = math.ceil(avg_sum / avg_chunk)
+                self._effective_summarize_every = max(base, min(n_needed, base * 8))
+                logger.info(
+                    "Adaptive interval: sum=%.1fs chunk=%.1fs → every %d chunks",
+                    avg_sum, avg_chunk, self._effective_summarize_every,
+                )
+            else:
+                # No timing data yet — fall back to queue-depth heuristic
+                if not queued:
+                    self._effective_summarize_every = min(self._effective_summarize_every * 2, base * 8)
+                    logger.info("Queue full — backed off to %d chunks (no timing data yet)", self._effective_summarize_every)
+                elif self._effective_summarize_every > base:
+                    self._effective_summarize_every = max(base, self._effective_summarize_every - 1)
 
     def _on_summary_complete(self, summary: str) -> None:
         self._full_summary = summary

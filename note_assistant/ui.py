@@ -168,6 +168,10 @@ class NoteAssistantUI(App):
         self._last_chunk_at: Optional[datetime] = None
         self._pipeline = None
         self._summary_buf = ""
+        self._t_loaded = True
+        self._s_loaded = True
+        self._t_model_label = ""
+        self._s_model_label = ""
 
     def set_pipeline(self, app) -> None:
         self._pipeline = app
@@ -255,10 +259,10 @@ class NoteAssistantUI(App):
             yield ProgressBar(id="file-progress", total=100, show_eta=False)
             with Horizontal(id="panels-row"):
                 with ScrollableContainer(id="transcript-panel"):
-                    yield Label("📝 Transcript")
+                    yield Label("📝 Transcript", id="transcript-panel-title")
                     yield RichLog(id="transcript-log", wrap=True)
                 with ScrollableContainer(id="summary-panel"):
-                    yield Label("✨ Summary")
+                    yield Label("✨ Summary", id="summary-panel-title")
                     yield RichLog(id="summary-log", wrap=True)
 
         # Done View
@@ -336,10 +340,13 @@ class NoteAssistantUI(App):
             self.query_one("#summary-log", RichLog).clear()
             self.query_one("#elapsed-label", Label).update("00:00")
             self.query_one("#file-progress").display = False
+            self.query_one("#transcript-panel-title", Label).update("📝 Transcript")
+            self.query_one("#summary-panel-title", Label).update("✨ Summary")
             self._chunk_count = 0
             self._last_chunk_at = None
             self._paused = False
             self._pipeline = None
+            self._summary_buf = ""
             self.query_one("#settings-view").display = True
         elif event.button.id == "quit-btn":
             self.exit(return_code=99)
@@ -371,6 +378,7 @@ class NoteAssistantUI(App):
             self.query_one("#settings-view").display = False
             self.query_one("#recording-view").display = True
             self.query_one("#file-progress").display = (self._config.audio.source == "file")
+            self._set_panel_titles()
             self._update_status_bar()
             self._start_pipeline(self._config)
 
@@ -394,13 +402,51 @@ class NoteAssistantUI(App):
         if total > 0 and current >= total:
             self.set_timer(1.0, self._show_done_view)
 
+    def _t_model_info(self) -> tuple[str, bool]:
+        backend = self._config.transcription.backend
+        if backend == "apple":
+            return "Apple Speech", False
+        elif backend == "mlx-whisper":
+            short = self._config.transcription.mlx_whisper_model.split("/")[-1]
+            return f"{short} (mlx-whisper)", True
+        else:
+            return f"{self._config.transcription.whisper_model} (faster-whisper)", True
+
+    def _s_model_info(self) -> tuple[str, bool]:
+        backend = self._config.summarization.backend
+        if backend == "apple":
+            return "Apple Intelligence", False
+        elif backend == "mlx":
+            short = self._config.summarization.mlx_model.split("/")[-1]
+            return f"{short} (mlx)", True
+        else:
+            return f"{self._config.summarization.ollama_model} (ollama)", True
+
+    def _set_panel_titles(self) -> None:
+        t_label, t_loading = self._t_model_info()
+        s_label, s_loading = self._s_model_info()
+        self._t_model_label = t_label
+        self._s_model_label = s_label
+        self._t_loaded = not t_loading
+        self._s_loaded = not s_loading
+        t_text = f"📝 Transcription — {t_label}  ⏳" if t_loading else f"📝 Transcription — {t_label}"
+        s_text = f"✨ Summary — {s_label}  ⏳" if s_loading else f"✨ Summary — {s_label}"
+        self.query_one("#transcript-panel-title", Label).update(t_text)
+        self.query_one("#summary-panel-title", Label).update(s_text)
+
     def push_transcript(self, text: str) -> None:
         if self._paused: return
         self._chunk_count += 1
+        if not self._t_loaded:
+            self._t_loaded = True
+            self.query_one("#transcript-panel-title", Label).update(f"📝 Transcription — {self._t_model_label}")
         self.query_one("#transcript-log", RichLog).write(text + " ")
         self._update_status_bar()
 
     def push_summary_start(self) -> None:
+        if not self._s_loaded:
+            self._s_loaded = True
+            self.query_one("#summary-panel-title", Label).update(f"✨ Summary — {self._s_model_label}")
         self._summary_buf = ""
         self.query_one("#summary-log", RichLog).clear()
 
@@ -412,6 +458,12 @@ class NoteAssistantUI(App):
 
     def push_error(self, source: str, message: str, severity: str = "error") -> None:
         self.notify(f"[{source}] {message}", severity=severity)
+
+    def push_backend_switch(self, model_label: str) -> None:
+        self._s_model_label = model_label
+        self._s_loaded = True
+        self.query_one("#summary-panel-title", Label).update(f"✨ Summary — {model_label}")
+        self.notify(f"Switched to fallback: {model_label}", severity="warning")
 
     def action_toggle_pause(self) -> None:
         if self._pipeline is None:
