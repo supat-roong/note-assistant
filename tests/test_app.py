@@ -320,3 +320,117 @@ def test_launch_does_not_close_terminal_on_normal_exit():
         _launch(cfg)
 
     assert not popen_calls
+
+
+def test_process_chunk_writes_to_recorder_when_enabled(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    mock_recorder = MagicMock()
+    app._recorder = mock_recorder
+    chunk = np.ones(1600, dtype=np.float32)
+    app._process_chunk(chunk)
+    mock_recorder.write.assert_called_once()
+    np.testing.assert_array_equal(mock_recorder.write.call_args[0][0], chunk)
+
+
+def test_process_chunk_skips_recorder_when_paused(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    mock_recorder = MagicMock()
+    app._recorder = mock_recorder
+    app.pause()
+    chunk = np.ones(1600, dtype=np.float32)
+    app._process_chunk(chunk)
+    mock_recorder.write.assert_not_called()
+
+
+def test_shutdown_with_recorder_uses_split_notes_sequence(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    from pathlib import Path
+    mock_config.output.auto_title = False
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+
+    mock_notes = MagicMock()
+    mock_recorder = MagicMock()
+    mock_recorder.finish.return_value = (Path("/tmp/rec.mp3"), Path("/tmp/rec.m4a"))
+
+    app._notes = mock_notes
+    app._recorder = mock_recorder
+    app._worker = MagicMock()
+
+    app._shutdown()
+
+    mock_notes.write_title_only.assert_called_once()
+    mock_recorder.finish.assert_called_once()
+    mock_notes.attach_recording.assert_called_once_with(Path("/tmp/rec.m4a"))
+    mock_recorder.cleanup.assert_called_once()
+    mock_notes.finalize_session.assert_called_once()
+    mock_notes.close_session.assert_not_called()
+
+
+def test_shutdown_without_recorder_uses_close_session(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    mock_config.output.auto_title = False
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+
+    mock_notes = MagicMock()
+    app._notes = mock_notes
+    app._recorder = None
+    app._worker = MagicMock()
+
+    app._shutdown()
+
+    mock_notes.close_session.assert_called_once()
+    mock_notes.write_title_only.assert_not_called()
+    mock_notes.finalize_session.assert_not_called()
+
+
+def test_shutdown_recorder_cleanup_runs_when_finish_fails(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock
+    mock_config.output.auto_title = False
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+
+    mock_notes = MagicMock()
+    mock_recorder = MagicMock()
+    mock_recorder.finish.side_effect = RuntimeError("ffmpeg not found")
+
+    app._notes = mock_notes
+    app._recorder = mock_recorder
+    app._worker = MagicMock()
+
+    app._shutdown()  # must not raise
+
+    mock_recorder.cleanup.assert_called_once()
+    mock_notes.finalize_session.assert_called_once()
+    mock_notes.attach_recording.assert_not_called()
+
+
+def test_shutdown_file_source_attaches_source_file_when_save_recording(tmp_path):
+    from unittest.mock import MagicMock
+    from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
+    from note_assistant.transcriber import BaseTranscriber
+    from conftest import MockSummarizer
+    import numpy as np
+
+    source_file = tmp_path / "input.mp3"
+    source_file.touch()
+
+    cfg = AppConfig(
+        audio=AudioConfig(source="file", file_path=source_file),
+        transcription=TranscriptionConfig(backend="faster-whisper"),
+        summarization=SummarizationConfig(backend="ollama"),
+        output=OutputConfig(
+            apple_notes=False,
+            save_transcript=False,
+            save_summary=False,
+            save_recording=True,
+            output_dir=tmp_path,
+        ),
+    )
+
+    class NullTranscriber(BaseTranscriber):
+        def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
+            return ""
+
+    app = NoteAssistantApp(cfg, transcriber=NullTranscriber(), summarizer=MockSummarizer())
+    assert app._recorder is None  # file source never creates a recorder

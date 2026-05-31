@@ -17,6 +17,7 @@ from .audio_capture import AudioSource
 from .config import AppConfig
 from .errors import error_bus
 from .notes_writer import NotesWriter
+from .recorder import SessionRecorder
 from .summarizer import BaseSummarizer, create_summarizer
 from .transcriber import BaseTranscriber, create_transcriber
 
@@ -236,6 +237,11 @@ class NoteAssistantApp:
         self._full_summary = ""
         self._chunk_count = 0
         self._start_time: datetime | None = None
+        self._recorder: SessionRecorder | None = None
+        if config.output.save_recording and config.audio.source != "file":
+            rec_dir = config.output.recording_dir if config.output.recording_dir else config.output.output_dir
+            rec_dir.mkdir(parents=True, exist_ok=True)
+            self._recorder = SessionRecorder(rec_dir, config.audio.sample_rate)
         self._effective_summarize_every = config.summarization.summarize_every
         self._last_chunk_time: float | None = None
         self._avg_chunk_seconds: float | None = None
@@ -315,6 +321,9 @@ class NoteAssistantApp:
         self._start_time = datetime.now()
         self._worker.start()
 
+        if self._recorder:
+            self._recorder.start()
+
         if self.config.output.apple_notes:
             self._notes = NotesWriter(self.config.output.apple_notes_title)
             self._notes.open_session()
@@ -348,6 +357,9 @@ class NoteAssistantApp:
     def _process_chunk(self, audio: np.ndarray) -> None:
         if self._paused_event.is_set():
             return
+
+        if self._recorder:
+            self._recorder.write(audio)
 
         # Track chunk arrival rate for adaptive interval estimation
         now = time.monotonic()
@@ -444,8 +456,35 @@ class NoteAssistantApp:
             if title:
                 self._notes.set_title(f"{title} — {self._notes._date_str} #Note Assistant")
 
+        # Reset note to title-only before encoding so user sees clean state while ffmpeg runs
+        if self._notes and self._recorder:
+            self._notes.write_title_only()
+
+        # Encode recording to MP3 + M4A
+        _m4a_path: Path | None = None
+        if self._recorder:
+            try:
+                _, _m4a_path = self._recorder.finish()
+            except Exception as e:
+                logger.warning("Recording encoding failed: %s", e)
+            finally:
+                self._recorder.cleanup()
+
+        # Finalize notes
         if self._notes:
-            self._notes.close_session()
+            attach_path = _m4a_path
+            if attach_path is None and self.config.audio.source == "file" and self.config.output.save_recording and self.config.audio.file_path:
+                self._notes.write_title_only()
+                attach_path = self.config.audio.file_path
+
+            if attach_path:
+                self._notes.attach_recording(attach_path)
+                self._notes.finalize_session()
+            elif self._recorder:
+                # Encoding failed; write_title_only was already called — still finalize
+                self._notes.finalize_session()
+            else:
+                self._notes.close_session()
 
         for s in self._worker._summarizers:
             try:
