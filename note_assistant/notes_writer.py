@@ -43,8 +43,7 @@ class NotesWriter:
         self._flush(force=True)
 
     def close_session(self) -> None:
-        self._closed = True
-        self._flush(force=True)
+        self.finalize_session()
 
     def write_title_only(self) -> None:
         """Reset note body to title heading only, before attaching a recording."""
@@ -71,7 +70,7 @@ class NotesWriter:
         script = f"""
         tell application "Notes"
             tell note id "{self._note_id}"
-                make new attachment with properties {{file name: POSIX file "{path}"}}
+                make new attachment with properties {{file name: POSIX file "{self._as(str(path))}"}}
             end tell
         end tell
         """

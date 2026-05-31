@@ -124,6 +124,13 @@ def test_attach_recording_calls_osascript_with_path(writer, tmp_path):
     assert str(fake_m4a) in calls[0]
 
 
+def test_attach_recording_escapes_special_chars_in_path(writer):
+    nw, calls = writer
+    nw.attach_recording(Path('/tmp/my "session"/recording.m4a'))
+    assert '\\"' in calls[0]
+    assert '"session"' not in calls[0]
+
+
 def test_attach_recording_skips_when_note_not_created(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(NotesWriter, "_run_osascript", lambda self, s: calls.append(s) or "")
