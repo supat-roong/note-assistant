@@ -93,6 +93,11 @@ class BaseSummarizer(ABC):
     def warmup(self) -> None:
         """Pre-load model into memory so the first summarize() call is fast."""
 
+    @property
+    def model_label(self) -> str:
+        """Human-readable model name for display in the UI."""
+        return ""
+
 
 # ---------------------------------------------------------------------------
 # Apple Foundation Models backend
@@ -127,6 +132,10 @@ class AppleFoundationSummarizer(BaseSummarizer):
         available, reason = model.is_available()
         if not available:
             raise RuntimeError(f"Apple Foundation Models not available: {reason}")
+
+    @property
+    def model_label(self) -> str:
+        return "Apple Intelligence"
 
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         fm = self._fm
@@ -199,6 +208,10 @@ class MLXSummarizer(BaseSummarizer):
         except ImportError as e:
             raise RuntimeError("mlx-lm not installed. Run: uv add mlx mlx-lm") from e
 
+    @property
+    def model_label(self) -> str:
+        return f"{self._model_name.split('/')[-1]} (mlx)"
+
     def _load(self) -> None:
         from mlx_lm import load
         logger.info("Loading MLX model: %s", self._model_name)
@@ -255,6 +268,10 @@ class OllamaSummarizer(BaseSummarizer):
         self._ollama: Any = None
         self._load()
 
+    @property
+    def model_label(self) -> str:
+        return f"{self._model_name} (ollama)"
+
     def _load(self) -> None:
         try:
             import ollama
@@ -290,6 +307,7 @@ class OllamaSummarizer(BaseSummarizer):
             model=self._model_name,
             messages=[{"role": "user", "content": prompt}],
             stream=True,
+            think=False,
         )
         async for chunk in stream:
             token = chunk["message"]["content"]
@@ -302,6 +320,7 @@ class OllamaSummarizer(BaseSummarizer):
             model=self._model_name,
             messages=[{"role": "user", "content": prompt}],
             stream=False,
+            think=False,
         )
         return response["message"]["content"].strip().strip('"').strip("'").rstrip(".")
 
