@@ -107,18 +107,21 @@ class NoteAssistantUI(App):
         width: 1fr;
         padding: 0 1;
     }
-    #auto-title-row {
-        height: auto;
-    }
-    #auto-title-row Label {
-        width: 1fr;
-        content-align: left middle;
-    }
+    #apple-notes-row,
+    #auto-title-row,
+    #save-transcript-row,
+    #save-summary-row,
     #save-recording-row {
         height: auto;
+        align: left middle;
     }
+    #apple-notes-row Label,
+    #auto-title-row Label,
+    #save-transcript-row Label,
+    #save-summary-row Label,
     #save-recording-row Label {
         width: 1fr;
+        height: 3;
         content-align: left middle;
     }
     #stop-row {
@@ -254,9 +257,18 @@ class NoteAssistantUI(App):
 
             with Vertical(classes="setting-group"):
                 yield Label("Output")
+                with Horizontal(id="apple-notes-row"):
+                    yield Label("Save to Apple Notes")
+                    yield Switch(value=self._config.output.apple_notes, id="apple-notes")
                 with Horizontal(id="auto-title-row"):
                     yield Label("Auto-generate note title")
                     yield Switch(value=self._config.output.auto_title, id="auto-title")
+                with Horizontal(id="save-transcript-row"):
+                    yield Label("Save transcript")
+                    yield Switch(value=self._config.output.save_transcript, id="save-transcript")
+                with Horizontal(id="save-summary-row"):
+                    yield Label("Save summary")
+                    yield Switch(value=self._config.output.save_summary, id="save-summary")
                 with Horizontal(id="save-recording-row"):
                     yield Label("Save session recording")
                     yield Switch(value=self._config.output.save_recording, id="save-recording")
@@ -332,6 +344,7 @@ class NoteAssistantUI(App):
 
     def _update_transcription_for_lang(self, lang: str) -> None:
         t_backend = self.query_one("#t-backend", Select)
+        prev_value = t_backend.value
         whisper_options = []
         if platform.machine() == "arm64":
             whisper_options.append(("Whisper (MLX)", "mlx-whisper"))
@@ -339,10 +352,16 @@ class NoteAssistantUI(App):
         if lang == "Auto":
             # Apple Speech requires a fixed locale — remove it from the dropdown.
             t_backend.set_options(whisper_options)
-            if t_backend.value == "apple":
-                t_backend.value = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
+            valid_values = {v for _, v in whisper_options}
+            t_backend.value = prev_value if prev_value in valid_values else (
+                "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
+            )
         else:
-            t_backend.set_options([("Apple Speech", "apple")] + whisper_options)
+            all_options = [("Apple Speech", "apple")] + whisper_options
+            t_backend.set_options(all_options)
+            valid_values = {v for _, v in all_options}
+            if prev_value in valid_values:
+                t_backend.value = prev_value
 
     def _update_file_input_visibility(self, source: str) -> None:
         row = self.query_one("#file-path-row")
@@ -390,6 +409,9 @@ class NoteAssistantUI(App):
                 chosen_backend = "mlx-whisper" if platform.machine() == "arm64" else "faster-whisper"
             self._config.transcription.backend = chosen_backend
             self._config.summarization.backend = self.query_one("#s-backend", Select).value
+            self._config.output.apple_notes = self.query_one("#apple-notes", Switch).value
+            self._config.output.save_transcript = self.query_one("#save-transcript", Switch).value
+            self._config.output.save_summary = self.query_one("#save-summary", Switch).value
             self._config.output.auto_title = self.query_one("#auto-title", Switch).value
             self._config.output.save_recording = self.query_one("#save-recording", Switch).value
 
