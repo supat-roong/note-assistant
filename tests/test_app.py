@@ -178,6 +178,31 @@ def test_shutdown_skips_title_when_auto_title_disabled(mock_config, mock_transcr
     mock_notes.close_session.assert_called_once()
 
 
+def test_worker_clear_queue_drains_pending_items(mock_summarizer):
+    worker = SummarizationWorker(
+        [mock_summarizer],
+        on_summary_token=lambda t: None,
+        on_summary_complete=lambda s: None,
+    )
+    worker.enqueue("a")
+    worker.enqueue("b")
+    worker.clear_queue()
+    assert worker._q.empty()
+
+
+def test_shutdown_clears_queue_then_enqueues_final_summary(mock_config, mock_transcriber, mock_summarizer):
+    from unittest.mock import MagicMock, call
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+    app._full_transcript = ["a", "b"]
+    app._since_last_summary = ["a", "b"]
+    app._worker = MagicMock()
+    app._shutdown()
+    calls = app._worker.method_calls
+    assert call.clear_queue() in calls
+    assert call.enqueue("a b") in calls
+    assert calls.index(call.clear_queue()) < calls.index(call.enqueue("a b"))
+
+
 def test_shutdown_enqueues_final_summary_when_unsummarized_chunks_remain(mock_config, mock_transcriber, mock_summarizer):
     from unittest.mock import MagicMock
     app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)

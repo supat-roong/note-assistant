@@ -96,6 +96,14 @@ class SummarizationWorker(threading.Thread):
     def resume(self) -> None:
         self._paused_event.clear()
 
+    def clear_queue(self) -> None:
+        """Drain all pending windows from the queue without processing them."""
+        while not self._q.empty():
+            try:
+                self._q.get_nowait()
+            except queue.Empty:
+                break
+
     def stop(self) -> None:
         self._q.put(None)
 
@@ -384,6 +392,7 @@ class NoteAssistantApp:
 
     def _shutdown(self) -> None:
         if self._since_last_summary:
+            self._worker.clear_queue()
             self._worker.enqueue(" ".join(self._full_transcript))
         self._worker.stop()
         self._worker.join(timeout=5)
