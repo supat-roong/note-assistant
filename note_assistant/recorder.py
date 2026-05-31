@@ -22,6 +22,8 @@ class SessionRecorder:
         self._m4a_path = recording_dir / f"recording_{ts}_tmp.m4a"
         self._mp3_path = recording_dir / f"recording_{ts}.mp3"
         self._sf: sf.SoundFile | None = None
+        self._started: bool = False
+        self._finished: bool = False
 
     def start(self) -> None:
         self._recording_dir.mkdir(parents=True, exist_ok=True)
@@ -32,6 +34,7 @@ class SessionRecorder:
             channels=1,
             subtype="FLOAT",
         )
+        self._started = True
 
     def write(self, chunk: np.ndarray) -> None:
         if self._sf is None:
@@ -41,9 +44,15 @@ class SessionRecorder:
     def finish(self) -> tuple[Path, Path]:
         """Close WAV and encode to MP3 + M4A. Returns (mp3_path, m4a_path).
 
+        Raises RuntimeError if called before start() or called a second time.
         Raises FileNotFoundError if ffmpeg is not installed.
         Raises subprocess.CalledProcessError if ffmpeg encoding fails.
         """
+        if not self._started:
+            raise RuntimeError("SessionRecorder.finish() called before start()")
+        if self._finished:
+            raise RuntimeError("SessionRecorder.finish() already called")
+
         if self._sf is not None:
             self._sf.close()
             self._sf = None
@@ -70,6 +79,7 @@ class SessionRecorder:
         )
         logger.debug("Encoded recording to M4A: %s", self._m4a_path)
 
+        self._finished = True
         return self._mp3_path, self._m4a_path
 
     def cleanup(self) -> None:

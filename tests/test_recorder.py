@@ -98,3 +98,20 @@ def test_cleanup_does_not_remove_mp3(tmp_path):
 def test_cleanup_is_safe_when_files_missing(tmp_path):
     rec = SessionRecorder(tmp_path)
     rec.cleanup()  # no files exist — must not raise
+
+
+def test_finish_raises_if_not_started(tmp_path):
+    rec = SessionRecorder(tmp_path)
+    with pytest.raises(RuntimeError, match="before start"):
+        rec.finish()
+
+
+def test_finish_raises_if_called_twice(tmp_path):
+    rec = SessionRecorder(tmp_path)
+    rec.start()
+    rec.write(np.zeros(160, dtype=np.float32))
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        rec.finish()
+    with pytest.raises(RuntimeError, match="already called"):
+        rec.finish()
