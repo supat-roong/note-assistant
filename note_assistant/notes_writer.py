@@ -69,41 +69,27 @@ class NotesWriter:
         self._flush(force=True)
 
     def attach_recording(self, path: Path) -> bool:
-        """Attach audio file to note via Edit > Attach File dialog (requires Accessibility).
+        """Attach audio file to note in background via AppleScript (no UI interaction).
 
         Must be called AFTER the final body write — any subsequent set body will
-        destroy the attachment. Returns True if attachment was attempted.
+        destroy the attachment. Returns True if attachment succeeded.
         """
         if not self._note_created:
             return False
         abs_path = path.resolve()
         script = f"""
         tell application "Notes"
-            activate
-            show note id "{self._note_id}"
-        end tell
-        delay 1.5
-        -- Open Attach File dialog (note is focused after show)
-        tell application "System Events"
-            tell process "Notes"
-                click menu item "Attach File…" of menu "Edit" of menu bar 1
-            end tell
-        end tell
-        delay 1.5
-        -- Navigate to file via Go to Folder (Cmd+Shift+G)
-        tell application "System Events"
-            keystroke "g" using {{command down, shift down}}
+            set theFile to POSIX file "{self._as(str(abs_path))}"
+            set targetNote to note id "{self._note_id}"
+            make new attachment with data theFile at targetNote
             delay 0.5
-            keystroke "{self._as(str(abs_path))}"
-            delay 0.3
-            keystroke return
-            delay 0.5
-            keystroke return
+            if (count of attachments of targetNote) > 1 then
+                delete last attachment of targetNote
+            end if
         end tell
-        delay 0.5
         """
         result = self._run_osascript(script)
-        return True
+        return result.startswith("attachment id")
 
     def _maybe_flush(self) -> None:
         self._flush()
@@ -129,9 +115,6 @@ class NotesWriter:
             f"<div><b>{self._he(self._title)}</b></div>",
             "<div><br></div>",
         ]
-        if self._recording_name:
-            parts.append(f"<div>🎙 {self._he(self._recording_name)}</div>")
-            parts.append("<div><br></div>")
         if self._summary:
             parts.append("<div><b>Summary</b></div>")
             parts.append(self._summary_to_html(self._summary))
@@ -159,7 +142,7 @@ class NotesWriter:
                 ["osascript", "-e", script],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=10,
             )
             return result.stdout.strip()
         except (subprocess.TimeoutExpired, FileNotFoundError):
