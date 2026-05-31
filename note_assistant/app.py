@@ -464,31 +464,31 @@ class NoteAssistantApp:
         if self._notes and self._recorder:
             self._notes.write_title_only()
 
-        # Encode recording to MP3 + M4A
+        # Encode recording, finalize notes, then clean up temps
         _m4a_path: Path | None = None
-        if self._recorder:
-            try:
-                _, _m4a_path = self._recorder.finish()
-            except Exception as e:
-                logger.warning("Recording encoding failed: %s", e)
-            finally:
+        try:
+            if self._recorder:
+                try:
+                    _, _m4a_path = self._recorder.finish()
+                except Exception as e:
+                    logger.warning("Recording encoding failed: %s", e)
+
+            if self._notes:
+                attach_path = _m4a_path
+                if attach_path is None and self.config.audio.source == "file" and self.config.output.save_recording and self.config.audio.file_path:
+                    self._notes.write_title_only()
+                    attach_path = self.config.audio.file_path
+
+                if attach_path:
+                    self._notes.attach_recording(attach_path)
+                    self._notes.finalize_session()
+                elif self._recorder:
+                    self._notes.finalize_session()
+                else:
+                    self._notes.close_session()
+        finally:
+            if self._recorder:
                 self._recorder.cleanup()
-
-        # Finalize notes
-        if self._notes:
-            attach_path = _m4a_path
-            if attach_path is None and self.config.audio.source == "file" and self.config.output.save_recording and self.config.audio.file_path:
-                self._notes.write_title_only()
-                attach_path = self.config.audio.file_path
-
-            if attach_path:
-                self._notes.attach_recording(attach_path)
-                self._notes.finalize_session()
-            elif self._recorder:
-                # Encoding failed; write_title_only was already called — still finalize
-                self._notes.finalize_session()
-            else:
-                self._notes.close_session()
 
         for s in self._worker._summarizers:
             try:

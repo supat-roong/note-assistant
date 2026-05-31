@@ -436,6 +436,33 @@ def test_shutdown_file_source_attaches_source_file_when_save_recording(tmp_path)
     assert app._recorder is None  # file source never creates a recorder
 
 
+def test_shutdown_cleanup_runs_after_attachment(mock_config, mock_transcriber, mock_summarizer):
+    """cleanup() must run after attach_recording() so M4A exists when Notes reads it."""
+    from unittest.mock import MagicMock, call
+    from pathlib import Path
+    mock_config.output.auto_title = False
+    app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
+
+    call_order = []
+    mock_notes = MagicMock()
+    mock_notes.attach_recording.side_effect = lambda p: call_order.append("attach")
+    mock_notes.finalize_session.side_effect = lambda: call_order.append("finalize")
+    mock_recorder = MagicMock()
+    mock_recorder.finish.return_value = (Path("/tmp/rec.mp3"), Path("/tmp/rec.m4a"))
+    mock_recorder.cleanup.side_effect = lambda: call_order.append("cleanup")
+
+    app._notes = mock_notes
+    app._recorder = mock_recorder
+    app._worker = MagicMock()
+
+    app._shutdown()
+
+    assert call_order.index("attach") < call_order.index("cleanup"), \
+        "cleanup() must run after attach_recording()"
+    assert call_order.index("finalize") < call_order.index("cleanup"), \
+        "cleanup() must run after finalize_session()"
+
+
 def test_shutdown_file_source_calls_attach_and_finalize_when_save_recording(mock_config, mock_transcriber, mock_summarizer):
     from unittest.mock import MagicMock
     from pathlib import Path
