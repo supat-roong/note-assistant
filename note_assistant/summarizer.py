@@ -112,6 +112,9 @@ class BaseSummarizer(ABC):
     def warmup(self) -> None:
         """Pre-load model into memory so the first summarize() call is fast."""
 
+    def close(self) -> None:
+        """Release any resources held by this summarizer. No-op by default."""
+
     @property
     def model_label(self) -> str:
         """Human-readable model name for display in the UI."""

@@ -141,3 +141,14 @@ def test_base_summarizer_generate_title_returns_empty():
     s = Minimal()
     result = asyncio.run(s.generate_title("summary text", "prompt {language} {summary}"))
     assert result == ""
+
+
+def test_base_summarizer_close_is_noop():
+    from note_assistant.summarizer import BaseSummarizer
+
+    class Minimal(BaseSummarizer):
+        async def summarize(self, transcript):
+            yield ""
+
+    s = Minimal()
+    s.close()  # must not raise
