@@ -439,6 +439,12 @@ class NoteAssistantApp:
         if self._notes:
             self._notes.close_session()
 
+        for s in self._worker._summarizers:
+            try:
+                s.close()
+            except Exception as e:
+                logger.warning("Error closing summarizer %s: %s", s, e)
+
         cfg = self.config.output
         if not (cfg.save_transcript or cfg.save_summary):
             return

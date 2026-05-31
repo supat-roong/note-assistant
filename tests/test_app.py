@@ -256,6 +256,47 @@ def test_launch_closes_terminal_on_return_code_99():
     assert (12345, signal.SIGKILL) in kill_calls
 
 
+def test_shutdown_calls_close_on_all_summarizers():
+    """_shutdown() must call close() on every summarizer in the worker."""
+    from unittest.mock import MagicMock
+    from note_assistant.app import NoteAssistantApp
+    from note_assistant.config import AppConfig, AudioConfig, TranscriptionConfig, SummarizationConfig, OutputConfig
+    from note_assistant.transcriber import BaseTranscriber
+    from conftest import MockSummarizer
+    import numpy as np
+
+    class TrackingMockSummarizer(MockSummarizer):
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class NullTranscriber(BaseTranscriber):
+        def transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
+            return ""
+
+    s1 = TrackingMockSummarizer()
+    s2 = TrackingMockSummarizer()
+
+    cfg = AppConfig(
+        audio=AudioConfig(source="mic"),
+        transcription=TranscriptionConfig(backend="faster-whisper"),
+        summarization=SummarizationConfig(backend="ollama"),
+        output=OutputConfig(apple_notes=False, save_transcript=False, save_summary=False),
+    )
+
+    app = NoteAssistantApp(cfg, transcriber=NullTranscriber(), summarizer=s1)
+    # Inject second summarizer directly into the worker's list
+    app._worker._summarizers.append(s2)
+
+    app._worker.start()
+    app._shutdown()
+
+    assert s1.closed, "Primary summarizer was not closed"
+    assert s2.closed, "Fallback summarizer was not closed"
+
+
 def test_launch_does_not_close_terminal_on_normal_exit():
     from unittest.mock import MagicMock, patch
     from note_assistant.__main__ import _launch
