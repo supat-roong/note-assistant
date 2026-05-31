@@ -6,6 +6,8 @@ import json
 import os
 import pathlib
 import platform
+import subprocess
+import time
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator
 
@@ -286,10 +288,42 @@ class OllamaSummarizer(BaseSummarizer):
         self.language_input = language_input
         self.language_output = language_output
         self._model_name = model_override or config.ollama_model
+        self._owned_process: subprocess.Popen | None = None
+        self._ensure_ollama_running()
         self.TOKEN_LIMIT = _ollama_context_length(self._model_name, config.ollama_host) or 40_960
         logger.debug("Ollama %s context length: %d", self._model_name, self.TOKEN_LIMIT)
         self._ollama: Any = None
         self._load()
+
+    def _ensure_ollama_running(self) -> None:
+        """Start Ollama server if not reachable; record process ownership."""
+        import urllib.request
+        url = f"{self.config.ollama_host}/api/tags"
+        try:
+            urllib.request.urlopen(url, timeout=2)
+            return  # already running — don't own it
+        except Exception:
+            pass
+
+        try:
+            self._owned_process = subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            logger.error("ollama binary not found in PATH — cannot auto-start Ollama server")
+            return
+
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            try:
+                urllib.request.urlopen(url, timeout=1)
+                logger.info("Ollama server started (pid %d)", self._owned_process.pid)
+                return
+            except Exception:
+                time.sleep(0.5)
+        logger.warning("Ollama server did not become reachable within 10 seconds")
 
     @property
     def model_label(self) -> str:

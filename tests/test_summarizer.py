@@ -1,4 +1,5 @@
 import platform
+import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from note_assistant.summarizer import (
@@ -33,7 +34,8 @@ def test_create_summarizer_does_not_mutate_config():
 
 
 async def test_ollama_summarizer_streams_tokens():
-    with patch.object(OllamaSummarizer, "_load"):
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"):
         cfg = SummarizationConfig(backend="ollama", ollama_model="llama3.2:3b")
         s = OllamaSummarizer(cfg, "English", "English")
 
@@ -48,7 +50,8 @@ async def test_ollama_summarizer_streams_tokens():
 
 
 async def test_ollama_summarizer_translation_appends_instruction():
-    with patch.object(OllamaSummarizer, "_load"):
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"):
         cfg = SummarizationConfig(backend="ollama")
         s = OllamaSummarizer(cfg, "English", "Thai")
         prompts = []
@@ -107,7 +110,8 @@ async def test_apple_summarizer_streams_tokens():
 
 
 async def test_ollama_generate_title_uses_template():
-    with patch.object(OllamaSummarizer, "_load"):
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"):
         cfg = SummarizationConfig(backend="ollama", ollama_model="llama3.2:3b")
         s = OllamaSummarizer(cfg, "English", "English")
         s._ollama = MagicMock()
@@ -121,7 +125,8 @@ async def test_ollama_generate_title_uses_template():
 
 
 async def test_ollama_generate_title_strips_punctuation():
-    with patch.object(OllamaSummarizer, "_load"):
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"):
         cfg = SummarizationConfig(backend="ollama")
         s = OllamaSummarizer(cfg, "English", "English")
         s._ollama = MagicMock()
@@ -152,3 +157,45 @@ def test_base_summarizer_close_is_noop():
 
     s = Minimal()
     s.close()  # must not raise
+
+
+def test_ensure_ollama_running_noop_when_already_running():
+    """When Ollama answers /api/tags, _owned_process stays None."""
+    with patch("urllib.request.urlopen", return_value=MagicMock()), \
+         patch.object(OllamaSummarizer, "_load"), \
+         patch("note_assistant.summarizer._ollama_context_length", return_value=4096):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg)
+    assert s._owned_process is None
+
+
+def test_ensure_ollama_running_starts_server_when_not_running():
+    """When /api/tags is unreachable, Ollama is started and _owned_process is set."""
+    mock_proc = MagicMock()
+    # First call (liveness check) fails, second call (poll after start) succeeds
+    side_effects = [OSError("connection refused"), MagicMock()]
+
+    with patch("urllib.request.urlopen", side_effect=side_effects), \
+         patch("note_assistant.summarizer.subprocess.Popen", return_value=mock_proc) as mock_popen, \
+         patch.object(OllamaSummarizer, "_load"), \
+         patch("note_assistant.summarizer._ollama_context_length", return_value=4096):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg)
+
+    mock_popen.assert_called_once_with(
+        ["ollama", "serve"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    assert s._owned_process is mock_proc
+
+
+def test_ensure_ollama_running_noop_when_binary_missing():
+    """FileNotFoundError (ollama not in PATH) logs an error and leaves _owned_process None."""
+    with patch("urllib.request.urlopen", side_effect=OSError("refused")), \
+         patch("note_assistant.summarizer.subprocess.Popen", side_effect=FileNotFoundError), \
+         patch.object(OllamaSummarizer, "_load"), \
+         patch("note_assistant.summarizer._ollama_context_length", return_value=4096):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg)
+    assert s._owned_process is None
