@@ -4,13 +4,14 @@ Live audio transcription + summarization → Apple Notes. Launched from a Deskto
 
 ## Features
 
-- 🎙️ **Audio input**: Microphone, System Audio (via BlackHole), or audio file
-- 📝 **Live transcription**: Apple Speech (on-device, Neural Engine) or faster-whisper
-- ✨ **Live summarization**: Apple Foundation Models (`apple-fm-sdk`), MLX (on-device), or Ollama
-- 🌐 **Language support**: Transcribe in one language, summarize in another
-- 🍎 **Apple Notes output**: Real-time updates to a new Note each session
+- 🎙️ **Audio input**: Microphone, System Audio (via BlackHole), or audio/video file
+- 📝 **Live transcription**: Apple Speech (on-device, Neural Engine), MLX Whisper (Apple Silicon), or faster-whisper
+- ✨ **Live summarization**: Apple Foundation Models (`apple-fm-sdk`), MLX (on-device), or Ollama — with automatic fallback on failure
+- 🌐 **Language support**: Transcribe in one language, summarize in another (English, Thai, Japanese, Chinese, Auto-detect)
+- 🍎 **Apple Notes output**: Real-time updates to a new Note each session, with auto-generated title
 - 🖥️ **Desktop app**: Double-click `NoteAssistant.app` to launch
-- ⚙️ **Auto-configured**: setup script detects your macOS version and chip
+- ⚙️ **Settings UI**: Configure audio source, backends, and language before each session
+- 🔄 **Restart without relaunching**: Return to settings and start a fresh session from the done screen
 
 ## Requirements
 
@@ -20,7 +21,7 @@ Live audio transcription + summarization → Apple Notes. Launched from a Deskto
 | Partial | 13–25 | Any | Apple Speech + Ollama |
 | Fallback | < 13 | Any | faster-whisper + Ollama |
 
-MLX (`summarization.backend: mlx`) can be used as an alternative on-device summarizer on Apple Silicon at any supported macOS version.
+MLX Whisper and MLX summarization can be used as alternative on-device options on Apple Silicon at any supported macOS version.
 
 ## Quick Start
 
@@ -46,7 +47,7 @@ bash scripts/build_app.sh
 ## Manual Usage
 
 ```bash
-# Default (reads config.yaml)
+# Default (reads config.yaml, opens settings UI)
 uv run python -m note_assistant
 
 # Override audio source
@@ -55,7 +56,8 @@ uv run python -m note_assistant --source system
 # Transcribe from an audio file (set path in TUI or config.yaml)
 uv run python -m note_assistant --source file
 
-# Override backends
+# Override transcription backend
+uv run python -m note_assistant --transcription mlx-whisper
 uv run python -m note_assistant --transcription faster-whisper --whisper-model small
 
 # Override summarization backend
@@ -78,36 +80,57 @@ uv run python -m note_assistant --log-level DEBUG
 
 ```yaml
 audio:
-  source: mic            # mic | system | file
-  file_path:             # absolute path, required when source is file
+  source: mic           # mic | system | file
+  file_path: null       # path to audio file when source is "file"
   sample_rate: 16000
-  chunk_seconds: 2       # seconds per transcription chunk
+  chunk_seconds: 5.0
 
 transcription:
-  backend: apple         # apple | faster-whisper
-  whisper_model: base    # tiny | base | small | medium | large-v3
+  backend: apple        # apple | faster-whisper | mlx-whisper
+  language: null        # null = auto-detect; e.g. "en", "ja" to force
+  whisper_model: base   # tiny | base | small | medium | large-v3
+  mlx_whisper_model: mlx-community/whisper-base-mlx
+  device: auto          # auto | cpu | mps | cuda
 
 summarization:
-  backend: apple         # apple | mlx | ollama
-  summarize_every: 3     # summarize after N transcript chunks
-  mlx_model: mlx-community/Llama-3.2-3B-Instruct-4bit
-  ollama_model: llama3.2:3b
+  backend: apple        # apple | mlx | ollama
+  summarize_every: 3    # summarize after N transcript chunks
+  prompt_template: |
+    Summarize the following transcript into concise bullet-point notes.
+    Write each bullet point on its own line starting with '- '.
+
+    {transcript}
+  mlx_model: mlx-community/Qwen3-8B-4bit
+  mlx_fallback_model: mlx-community/gemma-4-e4b-it-4bit
+  ollama_model: qwen3:8b
+  ollama_fallback_model: gemma4:e4b
   ollama_host: http://localhost:11434
 
 output:
   apple_notes: true
   apple_notes_title: "Note Assistant — {date}"
+  auto_title: true              # generate a short title from the summary via LLM
+  title_prompt_template: |
+    Generate a concise, informative title of 5 words or less for these notes.
+    Write the title in {language}.
+    Reply with ONLY the title — no quotes, no punctuation at the end:
+
+    {summary}
   save_transcript: true
   save_summary: true
   output_dir: ./notes
 
-language_input: English   # language of spoken audio
-language_output: English  # language of the generated summary
+language_input: English   # English | Thai | Japanese | Chinese | Auto
+language_output: English  # English | Thai | Japanese | Chinese
 
-log_level: WARNING        # DEBUG | INFO | WARNING | ERROR
+log_level: WARNING        # DEBUG | INFO | WARNING | ERROR | CRITICAL
 ```
 
 Logs are written to `note_assistant.log` in the current directory.
+
+## Backend Resilience
+
+If a summarization backend produces repeated empty or identical responses, it is automatically skipped and the next configured backend takes over (e.g. MLX → Ollama). The backend resets to primary on the next session.
 
 ## System Audio Setup (BlackHole)
 
@@ -124,4 +147,4 @@ Logs are written to `note_assistant.log` in the current directory.
 |---|---|
 | `Ctrl+Q` | Quit and save notes |
 | `Ctrl+P` | Pause / Resume |
-| `⏹ Stop` button | Stop recording (also shows elapsed time) |
+| `⏹ Stop` button | Stop recording — shows Restart or Quit options |
