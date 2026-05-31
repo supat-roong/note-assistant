@@ -103,7 +103,7 @@ summarization:
   mlx_model: mlx-community/Qwen3-8B-4bit
   mlx_fallback_model: mlx-community/gemma-4-e4b-it-OptiQ-4bit
   ollama_model: qwen3:8b
-  ollama_fallback_model: qwen3:4b
+  ollama_fallback_model: gemma4:e4b
   ollama_host: http://localhost:11434
 
 output:
