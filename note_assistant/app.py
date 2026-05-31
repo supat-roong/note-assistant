@@ -67,6 +67,7 @@ class SummarizationWorker(threading.Thread):
         self._warmed: set[int] = set()
         self._avg_sum_seconds: float | None = None
         self._consec_failures: list[int] = [0] * len(summarizers)
+        self._last_active_idx: int = 0
 
     @property
     def avg_summarization_seconds(self) -> float | None:
@@ -123,7 +124,7 @@ class SummarizationWorker(threading.Thread):
             if self._consec_failures[idx] >= 2:
                 logger.info("Skipping backend %d: %d consecutive failures", idx, self._consec_failures[idx])
                 continue
-            if idx > 0:
+            if idx > 0 and idx != self._last_active_idx:
                 self._on_backend_switch(summarizer.model_label)
             limit = summarizer.TOKEN_LIMIT
             if limit:
@@ -154,6 +155,7 @@ class SummarizationWorker(threading.Thread):
 
             if last and not _is_repetitive(last):
                 self._consec_failures[idx] = 0
+                self._last_active_idx = idx
                 self._on_summary_complete(last)
                 return
             if last:
