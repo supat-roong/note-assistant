@@ -104,9 +104,37 @@ class NotesWriter:
 
     @staticmethod
     def _summary_to_html(text: str) -> str:
-        """Convert Markdown summary to HTML for Apple Notes."""
+        """Convert Markdown summary to Apple Notes-compatible HTML.
+
+        Apple Notes handles <ul>/<li> fine but renders <p> and headings at
+        incorrect positions alongside <div> content, causing visible overlap.
+        """
+        import re
         import markdown
-        return markdown.markdown(text, extensions=["nl2br"])
+
+        raw = markdown.markdown(text, extensions=["nl2br"])
+
+        # Unwrap <p> inside loose list items before converting standalone <p>.
+        raw = re.sub(
+            r"<li>\s*<p>(.*?)</p>\s*</li>",
+            lambda m: f"<li>{m.group(1).strip()}</li>",
+            raw,
+            flags=re.DOTALL,
+        )
+        raw = re.sub(
+            r"<h\d>(.*?)</h\d>",
+            lambda m: f"<div><b>{m.group(1)}</b></div>",
+            raw,
+            flags=re.DOTALL,
+        )
+        raw = re.sub(
+            r"<p>(.*?)</p>",
+            lambda m: f"<div>{m.group(1)}</div>",
+            raw,
+            flags=re.DOTALL,
+        )
+        # Strip bare newlines so _as() doesn't embed literal \n in the AppleScript string.
+        return raw.replace("\n", "")
 
     @staticmethod
     def _he(text: str) -> str:

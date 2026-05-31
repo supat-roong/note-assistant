@@ -68,3 +68,14 @@ def test_escape_newline():
 
 def test_escape_backslash():
     assert NotesWriter._as("a\\b") == "a\\\\b"
+
+
+def test_summary_to_html_no_p_or_heading_elements():
+    """Apple Notes overlaps content when <p> or heading elements are present."""
+    html = NotesWriter._summary_to_html("- Point one\n- Point two\n\nPlain paragraph.")
+    for tag in ("<p>", "</p>", "<h1>", "<h2>", "<h3>"):
+        assert tag not in html, f"Block element {tag!r} must not appear in Apple Notes HTML"
+    assert "Point one" in html
+    assert "Point two" in html
+    assert "Plain paragraph" in html
+    assert "<li>" in html
