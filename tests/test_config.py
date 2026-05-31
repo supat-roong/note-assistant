@@ -61,3 +61,19 @@ def test_load_config_custom_title_prompt_from_yaml(tmp_path):
     p.write_text('output:\n  title_prompt_template: "Custom {language} {summary}"\n')
     cfg = load_config(path=p)
     assert cfg.output.title_prompt_template == "Custom {language} {summary}"
+
+
+def test_output_config_save_recording_default():
+    assert OutputConfig().save_recording is False
+
+
+def test_output_config_recording_dir_default_is_none():
+    assert OutputConfig().recording_dir is None
+
+
+def test_load_config_save_recording_from_yaml(tmp_path):
+    p = tmp_path / "config.yaml"
+    p.write_text("output:\n  save_recording: true\n  recording_dir: /tmp/recordings\n")
+    cfg = load_config(path=p)
+    assert cfg.output.save_recording is True
+    assert cfg.output.recording_dir == Path("/tmp/recordings")

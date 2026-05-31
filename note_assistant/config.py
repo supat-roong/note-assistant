@@ -57,6 +57,8 @@ class OutputConfig(BaseModel):
         "Reply with ONLY the title — no quotes, no punctuation at the end:\n\n"
         "{summary}"
     )
+    save_recording: bool = False
+    recording_dir: Optional[Path] = None
 
 
 class AppConfig(BaseModel):
