@@ -67,10 +67,11 @@ class NotesWriter:
         """Attach an audio file to the note (M4A from live recording or source file)."""
         if not self._note_created:
             return
+        abs_path = path.resolve()
         script = f"""
         tell application "Notes"
             tell note id "{self._note_id}"
-                make new attachment with properties {{file name: POSIX file "{self._as(str(path))}"}}
+                make new attachment with properties {{file name: POSIX file "{self._as(str(abs_path))}"}}
             end tell
         end tell
         """
