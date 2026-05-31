@@ -142,8 +142,9 @@ class SummarizationWorker(threading.Thread):
                     last += chunk
                     self._on_summary_token(chunk)
             except Exception as e:
+                has_fallback = idx + 1 < len(self._summarizers)
                 logger.error("Summarization error (backend %d): %s", idx, e)
-                error_bus.emit("summarizer", str(e))
+                error_bus.emit("summarizer", str(e), "warning" if has_fallback else "error")
                 last = ""
 
             if last and not _is_repetitive(last):
