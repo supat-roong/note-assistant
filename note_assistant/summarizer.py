@@ -325,6 +325,17 @@ class OllamaSummarizer(BaseSummarizer):
                 time.sleep(0.5)
         logger.warning("Ollama server did not become reachable within 10 seconds")
 
+    def close(self) -> None:
+        """Terminate the Ollama process if we started it."""
+        if self._owned_process is None:
+            return
+        self._owned_process.terminate()
+        try:
+            self._owned_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._owned_process.kill()
+        self._owned_process = None
+
     @property
     def model_label(self) -> str:
         return f"{self._model_name} (ollama)"

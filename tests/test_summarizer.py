@@ -199,3 +199,44 @@ def test_ensure_ollama_running_noop_when_binary_missing():
         cfg = SummarizationConfig(backend="ollama")
         s = OllamaSummarizer(cfg)
     assert s._owned_process is None
+
+
+def test_ollama_summarizer_close_terminates_owned_process():
+    """close() calls terminate() then wait() on the owned process."""
+    mock_proc = MagicMock()
+    mock_proc.wait.return_value = 0
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"), \
+         patch("note_assistant.summarizer._ollama_context_length", return_value=4096):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg)
+    s._owned_process = mock_proc
+    s.close()
+    mock_proc.terminate.assert_called_once()
+    mock_proc.wait.assert_called_once_with(timeout=5)
+    assert s._owned_process is None
+
+
+def test_ollama_summarizer_close_kills_when_terminate_times_out():
+    """close() escalates to kill() if terminate() times out."""
+    mock_proc = MagicMock()
+    mock_proc.wait.side_effect = subprocess.TimeoutExpired(cmd="ollama serve", timeout=5)
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"), \
+         patch("note_assistant.summarizer._ollama_context_length", return_value=4096):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg)
+    s._owned_process = mock_proc
+    s.close()
+    mock_proc.kill.assert_called_once()
+    assert s._owned_process is None
+
+
+def test_ollama_summarizer_close_noop_when_not_owned():
+    """close() does nothing when _owned_process is None."""
+    with patch.object(OllamaSummarizer, "_load"), \
+         patch.object(OllamaSummarizer, "_ensure_ollama_running"), \
+         patch("note_assistant.summarizer._ollama_context_length", return_value=4096):
+        cfg = SummarizationConfig(backend="ollama")
+        s = OllamaSummarizer(cfg)
+    s.close()  # must not raise
