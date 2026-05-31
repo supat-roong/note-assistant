@@ -460,26 +460,37 @@ class NoteAssistantApp:
                 else:
                     self._notes.set_title(new_title)
 
-        # Encode recording to MP3, reference it in note body, then clean up WAV
+        # Encode recording to MP3, reference filename in note body
+        _mp3_path: Path | None = None
         if self._recorder:
             try:
-                mp3_path = self._recorder.finish()
+                _mp3_path = self._recorder.finish()
                 if self._notes:
-                    self._notes.set_recording(mp3_path)
+                    self._notes.set_recording(_mp3_path)
             except Exception as e:
                 logger.warning("Recording encoding failed: %s", e)
             finally:
                 self._recorder.cleanup()
 
         # For file-source mode, reference the source file in the note
-        if (self.config.audio.source == "file"
-                and self.config.output.save_recording
-                and self.config.audio.file_path
-                and self._notes):
-            self._notes.set_recording(self.config.audio.file_path)
+        _attach_path: Path | None = None
+        if self.config.audio.source == "file" and self.config.output.save_recording and self.config.audio.file_path:
+            if self._notes:
+                self._notes.set_recording(self.config.audio.file_path)
+            _attach_path = self.config.audio.file_path
+        elif _mp3_path:
+            _attach_path = _mp3_path
 
+        # Final body write — must happen before attach_recording
         if self._notes:
             self._notes.close_session()
+
+        # Attach audio to note AFTER final body write (attachment survives only if no body writes follow)
+        if self._notes and _attach_path:
+            try:
+                self._notes.attach_recording(_attach_path)
+            except Exception as e:
+                logger.warning("Recording attachment failed: %s", e)
 
         for s in self._worker._summarizers:
             try:

@@ -68,19 +68,57 @@ class NotesWriter:
         self._closed = True
         self._flush(force=True)
 
-    def attach_recording(self, path: Path) -> None:
-        """Attach an audio file to the note (M4A from live recording or source file)."""
+    def attach_recording(self, path: Path) -> bool:
+        """Attach audio file to note via Edit > Attach File dialog (requires Accessibility).
+
+        Must be called AFTER the final body write — any subsequent set body will
+        destroy the attachment. Returns True if attachment was attempted.
+        """
         if not self._note_created:
-            return
+            return False
         abs_path = path.resolve()
         script = f"""
         tell application "Notes"
-            tell note id "{self._note_id}"
-                make new attachment with properties {{file name: POSIX file "{self._as(str(abs_path))}"}}
+            activate
+            show note id "{self._note_id}"
+        end tell
+        delay 0.5
+        -- Click note body to focus it for editing
+        tell application "System Events"
+            tell process "Notes"
+                set w to window 1
+                set winPos to position of w
+                set winSize to size of w
+                click at {{(item 1 of winPos) + round((item 1 of winSize) * 0.65), (item 2 of winPos) + round((item 2 of winSize) * 0.4)}}
             end tell
         end tell
+        delay 0.3
+        -- Go to end of note so attachment lands after all content
+        tell application "System Events"
+            key code 119 using command down
+        end tell
+        delay 0.2
+        -- Open Attach File dialog
+        tell application "System Events"
+            tell process "Notes"
+                click menu item "Attach File\\u2026" of menu "Edit" of menu bar 1
+            end tell
+        end tell
+        delay 1.0
+        -- Navigate to file via Go to Folder (Cmd+Shift+G)
+        tell application "System Events"
+            keystroke "g" using {{command down, shift down}}
+            delay 0.5
+            keystroke "{self._as(str(abs_path))}"
+            delay 0.3
+            keystroke return
+            delay 0.5
+            keystroke return
+        end tell
+        delay 0.5
         """
-        self._run_osascript(script)
+        result = self._run_osascript(script)
+        return True
 
     def _maybe_flush(self) -> None:
         self._flush()

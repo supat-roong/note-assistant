@@ -116,17 +116,17 @@ def test_finalize_session_forces_flush_with_full_content(writer):
 
 def test_attach_recording_calls_osascript_with_path(writer, tmp_path):
     nw, calls = writer
-    fake_m4a = tmp_path / "recording.m4a"
-    fake_m4a.touch()
-    nw.attach_recording(fake_m4a)
+    fake_mp3 = tmp_path / "recording.mp3"
+    fake_mp3.touch()
+    nw.attach_recording(fake_mp3)
     assert len(calls) == 1
-    assert "make new attachment" in calls[0]
-    assert str(fake_m4a) in calls[0]
+    assert "Attach File" in calls[0]
+    assert str(fake_mp3.resolve()) in calls[0]
 
 
 def test_attach_recording_escapes_special_chars_in_path(writer):
     nw, calls = writer
-    nw.attach_recording(Path('/tmp/my "session"/recording.m4a'))
+    nw.attach_recording(Path('/tmp/my "session"/recording.mp3'))
     assert '\\"' in calls[0]
     assert '"session"' not in calls[0]
 
