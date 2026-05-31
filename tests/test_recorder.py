@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 from pathlib import Path
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 from note_assistant.recorder import SessionRecorder
 
@@ -27,35 +27,31 @@ def test_write_appends_chunks(tmp_path):
     assert sr == 16000
 
 
-def test_finish_calls_ffmpeg_for_mp3_and_m4a(tmp_path):
+def test_finish_calls_ffmpeg_for_mp3(tmp_path):
     rec = SessionRecorder(tmp_path)
     rec.start()
     rec.write(np.zeros(160, dtype=np.float32))
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
-        mp3, m4a = rec.finish()
+        mp3 = rec.finish()
 
-    assert mock_run.call_count == 2
-    first_cmd = mock_run.call_args_list[0][0][0]
-    second_cmd = mock_run.call_args_list[1][0][0]
-    assert ".mp3" in str(first_cmd)
-    assert ".m4a" in str(second_cmd)
+    assert mock_run.call_count == 1
+    cmd = mock_run.call_args_list[0][0][0]
+    assert ".mp3" in str(cmd)
 
 
-def test_finish_returns_mp3_and_m4a_paths(tmp_path):
+def test_finish_returns_mp3_path(tmp_path):
     rec = SessionRecorder(tmp_path)
     rec.start()
     rec.write(np.zeros(160, dtype=np.float32))
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
-        mp3, m4a = rec.finish()
+        mp3 = rec.finish()
 
     assert mp3.suffix == ".mp3"
-    assert m4a.suffix == ".m4a"
     assert mp3.parent == tmp_path
-    assert m4a.parent == tmp_path
 
 
 def test_finish_raises_when_ffmpeg_missing(tmp_path):
@@ -78,13 +74,11 @@ def test_finish_raises_on_ffmpeg_nonzero_exit(tmp_path):
             rec.finish()
 
 
-def test_cleanup_removes_wav_and_m4a(tmp_path):
+def test_cleanup_removes_wav(tmp_path):
     rec = SessionRecorder(tmp_path)
     rec._wav_path.touch()
-    rec._m4a_path.touch()
     rec.cleanup()
     assert not rec._wav_path.exists()
-    assert not rec._m4a_path.exists()
 
 
 def test_cleanup_does_not_remove_mp3(tmp_path):

@@ -1,4 +1,4 @@
-"""Session audio recorder — streams to WAV, encodes to MP3 + M4A at shutdown."""
+"""Session audio recorder — streams to WAV, encodes to MP3 at shutdown."""
 from __future__ import annotations
 
 import subprocess
@@ -12,14 +12,13 @@ from note_assistant import logger
 
 
 class SessionRecorder:
-    """Streams float32 audio chunks to a temp WAV, then encodes to MP3 + M4A via ffmpeg."""
+    """Streams float32 audio chunks to a temp WAV, then encodes to MP3 via ffmpeg."""
 
     def __init__(self, recording_dir: Path, sample_rate: int = 16_000):
         self._recording_dir = recording_dir
         self._sample_rate = sample_rate
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self._wav_path = recording_dir / f"recording_{ts}.wav"
-        self._m4a_path = recording_dir / f"recording_{ts}_tmp.m4a"
         self._mp3_path = recording_dir / f"recording_{ts}.mp3"
         self._sf: sf.SoundFile | None = None
         self._started: bool = False
@@ -41,8 +40,8 @@ class SessionRecorder:
             return
         self._sf.write(chunk)
 
-    def finish(self) -> tuple[Path, Path]:
-        """Close WAV and encode to MP3 + M4A. Returns (mp3_path, m4a_path).
+    def finish(self) -> Path:
+        """Close WAV and encode to MP3. Returns mp3_path.
 
         Raises RuntimeError if called before start() or called a second time.
         Raises FileNotFoundError if ffmpeg is not installed.
@@ -67,24 +66,11 @@ class SessionRecorder:
             check=True,
         )
         logger.debug("Encoded recording to MP3: %s", self._mp3_path)
-
-        subprocess.run(
-            [
-                "ffmpeg", "-y", "-i", str(self._wav_path),
-                "-ar", str(self._sample_rate), "-ac", "1", "-c:a", "aac",
-                str(self._m4a_path),
-            ],
-            capture_output=True,
-            check=True,
-        )
-        logger.debug("Encoded recording to M4A: %s", self._m4a_path)
-
         self._finished = True
-        return self._mp3_path, self._m4a_path
+        return self._mp3_path
 
     def cleanup(self) -> None:
-        for path in (self._wav_path, self._m4a_path):
-            try:
-                path.unlink(missing_ok=True)
-            except Exception as e:
-                logger.warning("Could not remove temp file %s: %s", path, e)
+        try:
+            self._wav_path.unlink(missing_ok=True)
+        except Exception as e:
+            logger.warning("Could not remove temp WAV %s: %s", self._wav_path, e)

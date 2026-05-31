@@ -460,35 +460,26 @@ class NoteAssistantApp:
                 else:
                     self._notes.set_title(new_title)
 
-        # Reset note to title-only before encoding so user sees clean state while ffmpeg runs
-        if self._notes and self._recorder:
-            self._notes.write_title_only()
-
-        # Encode recording, finalize notes, then clean up temps
-        _m4a_path: Path | None = None
-        try:
-            if self._recorder:
-                try:
-                    _, _m4a_path = self._recorder.finish()
-                except Exception as e:
-                    logger.warning("Recording encoding failed: %s", e)
-
-            if self._notes:
-                attach_path = _m4a_path
-                if attach_path is None and self.config.audio.source == "file" and self.config.output.save_recording and self.config.audio.file_path:
-                    self._notes.write_title_only()
-                    attach_path = self.config.audio.file_path
-
-                if attach_path:
-                    self._notes.attach_recording(attach_path)
-                    self._notes.finalize_session()
-                elif self._recorder:
-                    self._notes.finalize_session()
-                else:
-                    self._notes.close_session()
-        finally:
-            if self._recorder:
+        # Encode recording to MP3, reference it in note body, then clean up WAV
+        if self._recorder:
+            try:
+                mp3_path = self._recorder.finish()
+                if self._notes:
+                    self._notes.set_recording(mp3_path)
+            except Exception as e:
+                logger.warning("Recording encoding failed: %s", e)
+            finally:
                 self._recorder.cleanup()
+
+        # For file-source mode, reference the source file in the note
+        if (self.config.audio.source == "file"
+                and self.config.output.save_recording
+                and self.config.audio.file_path
+                and self._notes):
+            self._notes.set_recording(self.config.audio.file_path)
+
+        if self._notes:
+            self._notes.close_session()
 
         for s in self._worker._summarizers:
             try:

@@ -24,6 +24,7 @@ class NotesWriter:
         self._transcript_lines: list[str] = []
         self._summary: str = ""
         self._closed = False
+        self._recording_name: str = ""
 
     def open_session(self) -> None:
         self._note_id = self._create_note(self._build_html())
@@ -41,6 +42,10 @@ class NotesWriter:
         """Rename the note with an informative title generated after processing."""
         self._title = new_title
         self._flush(force=True)
+
+    def set_recording(self, path: Path) -> None:
+        """Store recording filename to display in note body between title and summary."""
+        self._recording_name = path.name
 
     def close_session(self) -> None:
         self.finalize_session()
@@ -101,6 +106,9 @@ class NotesWriter:
             f"<div><b>{self._he(self._title)}</b></div>",
             "<div><br></div>",
         ]
+        if self._recording_name:
+            parts.append(f"<div>🎙 {self._he(self._recording_name)}</div>")
+            parts.append("<div><br></div>")
         if self._summary:
             parts.append("<div><b>Summary</b></div>")
             parts.append(self._summary_to_html(self._summary))

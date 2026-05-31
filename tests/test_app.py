@@ -344,7 +344,7 @@ def test_process_chunk_skips_recorder_when_paused(mock_config, mock_transcriber,
     mock_recorder.write.assert_not_called()
 
 
-def test_shutdown_with_recorder_uses_split_notes_sequence(mock_config, mock_transcriber, mock_summarizer):
+def test_shutdown_with_recorder_sets_recording_and_closes(mock_config, mock_transcriber, mock_summarizer):
     from unittest.mock import MagicMock
     from pathlib import Path
     mock_config.output.auto_title = False
@@ -352,7 +352,7 @@ def test_shutdown_with_recorder_uses_split_notes_sequence(mock_config, mock_tran
 
     mock_notes = MagicMock()
     mock_recorder = MagicMock()
-    mock_recorder.finish.return_value = (Path("/tmp/rec.mp3"), Path("/tmp/rec.m4a"))
+    mock_recorder.finish.return_value = Path("/tmp/rec.mp3")
 
     app._notes = mock_notes
     app._recorder = mock_recorder
@@ -360,12 +360,10 @@ def test_shutdown_with_recorder_uses_split_notes_sequence(mock_config, mock_tran
 
     app._shutdown()
 
-    mock_notes.write_title_only.assert_called_once()
     mock_recorder.finish.assert_called_once()
-    mock_notes.attach_recording.assert_called_once_with(Path("/tmp/rec.m4a"))
+    mock_notes.set_recording.assert_called_once_with(Path("/tmp/rec.mp3"))
     mock_recorder.cleanup.assert_called_once()
-    mock_notes.finalize_session.assert_called_once()
-    mock_notes.close_session.assert_not_called()
+    mock_notes.close_session.assert_called_once()
 
 
 def test_shutdown_without_recorder_uses_close_session(mock_config, mock_transcriber, mock_summarizer):
@@ -381,8 +379,7 @@ def test_shutdown_without_recorder_uses_close_session(mock_config, mock_transcri
     app._shutdown()
 
     mock_notes.close_session.assert_called_once()
-    mock_notes.write_title_only.assert_not_called()
-    mock_notes.finalize_session.assert_not_called()
+    mock_notes.set_recording.assert_not_called()
 
 
 def test_shutdown_recorder_cleanup_runs_when_finish_fails(mock_config, mock_transcriber, mock_summarizer):
@@ -401,8 +398,8 @@ def test_shutdown_recorder_cleanup_runs_when_finish_fails(mock_config, mock_tran
     app._shutdown()  # must not raise
 
     mock_recorder.cleanup.assert_called_once()
-    mock_notes.finalize_session.assert_called_once()
-    mock_notes.attach_recording.assert_not_called()
+    mock_notes.set_recording.assert_not_called()
+    mock_notes.close_session.assert_called_once()
 
 
 def test_shutdown_file_source_attaches_source_file_when_save_recording(tmp_path):
@@ -436,19 +433,19 @@ def test_shutdown_file_source_attaches_source_file_when_save_recording(tmp_path)
     assert app._recorder is None  # file source never creates a recorder
 
 
-def test_shutdown_cleanup_runs_after_attachment(mock_config, mock_transcriber, mock_summarizer):
-    """cleanup() must run after attach_recording() so M4A exists when Notes reads it."""
-    from unittest.mock import MagicMock, call
+def test_shutdown_cleanup_runs_after_set_recording(mock_config, mock_transcriber, mock_summarizer):
+    """cleanup() must run after set_recording() so the recording path is captured first."""
+    from unittest.mock import MagicMock
     from pathlib import Path
     mock_config.output.auto_title = False
     app = NoteAssistantApp(mock_config, transcriber=mock_transcriber, summarizer=mock_summarizer)
 
     call_order = []
     mock_notes = MagicMock()
-    mock_notes.attach_recording.side_effect = lambda p: call_order.append("attach")
-    mock_notes.finalize_session.side_effect = lambda: call_order.append("finalize")
+    mock_notes.set_recording.side_effect = lambda p: call_order.append("set_recording")
+    mock_notes.close_session.side_effect = lambda: call_order.append("close")
     mock_recorder = MagicMock()
-    mock_recorder.finish.return_value = (Path("/tmp/rec.mp3"), Path("/tmp/rec.m4a"))
+    mock_recorder.finish.return_value = Path("/tmp/rec.mp3")
     mock_recorder.cleanup.side_effect = lambda: call_order.append("cleanup")
 
     app._notes = mock_notes
@@ -457,13 +454,11 @@ def test_shutdown_cleanup_runs_after_attachment(mock_config, mock_transcriber, m
 
     app._shutdown()
 
-    assert call_order.index("attach") < call_order.index("cleanup"), \
-        "cleanup() must run after attach_recording()"
-    assert call_order.index("finalize") < call_order.index("cleanup"), \
-        "cleanup() must run after finalize_session()"
+    assert call_order.index("set_recording") < call_order.index("cleanup")
+    assert call_order.index("cleanup") < call_order.index("close")
 
 
-def test_shutdown_file_source_calls_attach_and_finalize_when_save_recording(mock_config, mock_transcriber, mock_summarizer):
+def test_shutdown_file_source_sets_recording_ref_when_save_recording(mock_config, mock_transcriber, mock_summarizer):
     from unittest.mock import MagicMock
     from pathlib import Path
     mock_config.audio.source = "file"
@@ -480,7 +475,5 @@ def test_shutdown_file_source_calls_attach_and_finalize_when_save_recording(mock
 
     app._shutdown()
 
-    mock_notes.write_title_only.assert_called_once()
-    mock_notes.attach_recording.assert_called_once_with(Path("/tmp/input.mp3"))
-    mock_notes.finalize_session.assert_called_once()
-    mock_notes.close_session.assert_not_called()
+    mock_notes.set_recording.assert_called_once_with(Path("/tmp/input.mp3"))
+    mock_notes.close_session.assert_called_once()
