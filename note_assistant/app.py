@@ -68,6 +68,7 @@ class SummarizationWorker(threading.Thread):
         self._avg_sum_seconds: float | None = None
         self._consec_failures: list[int] = [0] * len(summarizers)
         self._last_active_idx: int = 0
+        self._closed_backends: set[int] = set()
 
     @property
     def avg_summarization_seconds(self) -> float | None:
@@ -131,6 +132,13 @@ class SummarizationWorker(threading.Thread):
         for idx, summarizer in enumerate(self._summarizers):
             if self._consec_failures[idx] >= 2:
                 logger.info("Skipping backend %d: %d consecutive failures", idx, self._consec_failures[idx])
+                if idx not in self._closed_backends:
+                    self._closed_backends.add(idx)
+                    try:
+                        self._summarizers[idx].close()
+                        logger.info("Released resources for backend %d (permanent failure)", idx)
+                    except Exception as e:
+                        logger.warning("Error releasing backend %d: %s", idx, e)
                 continue
             if idx > 0 and idx != self._last_active_idx:
                 self._on_backend_switch(summarizer.model_label)

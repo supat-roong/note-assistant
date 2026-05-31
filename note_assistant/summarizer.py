@@ -246,6 +246,18 @@ class MLXSummarizer(BaseSummarizer):
         if self._model is None:
             self._load()
 
+    def close(self) -> None:
+        """Unload model weights from GPU/Metal memory."""
+        if self._model is not None:
+            logger.info("Unloading MLX model from memory: %s", self._model_name)
+            self._model = None
+            self._tokenizer = None
+            try:
+                import mlx.core as mx
+                mx.metal.clear_cache()
+            except Exception:
+                pass
+
     async def summarize(self, transcript: str) -> AsyncGenerator[str, None]:
         from mlx_lm import stream_generate
         if self._model is None:
