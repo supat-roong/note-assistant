@@ -221,9 +221,16 @@ class MLXSummarizer(BaseSummarizer):
             )
 
         messages = [{"role": "user", "content": prompt}]
-        formatted = self._tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        try:
+            # enable_thinking=False suppresses Qwen3's chain-of-thought block
+            formatted = self._tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        except TypeError:
+            formatted = self._tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+            )
 
         for response in stream_generate(self._model, self._tokenizer, formatted, max_tokens=512):
             if response.text:
