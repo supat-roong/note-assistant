@@ -66,6 +66,7 @@ class SummarizationWorker(threading.Thread):
         self._last_queue_warning = 0.0
         self._warmed: set[int] = set()
         self._avg_sum_seconds: float | None = None
+        self._consec_failures: list[int] = [0] * len(summarizers)
 
     @property
     def avg_summarization_seconds(self) -> float | None:
@@ -119,6 +120,9 @@ class SummarizationWorker(threading.Thread):
         _t0 = time.monotonic()
         est_tokens = _estimate_tokens(window)
         for idx, summarizer in enumerate(self._summarizers):
+            if self._consec_failures[idx] >= 2:
+                logger.info("Skipping backend %d: %d consecutive failures", idx, self._consec_failures[idx])
+                continue
             if idx > 0:
                 self._on_backend_switch(summarizer.model_label)
             limit = summarizer.TOKEN_LIMIT
@@ -142,12 +146,14 @@ class SummarizationWorker(threading.Thread):
                     last += chunk
                     self._on_summary_token(chunk)
             except Exception as e:
+                self._consec_failures[idx] += 1
                 has_fallback = idx + 1 < len(self._summarizers)
                 logger.error("Summarization error (backend %d): %s", idx, e)
                 error_bus.emit("summarizer", str(e), "warning" if has_fallback else "error")
                 last = ""
 
             if last and not _is_repetitive(last):
+                self._consec_failures[idx] = 0
                 self._on_summary_complete(last)
                 return
             if last:
